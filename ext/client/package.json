@@ -1,0 +1,45 @@
+{
+    "name": "cdm16-lsp",
+    "displayName": "CDM16 LSP",
+    "description": "lsp extension for cdm-16 assembly",
+    "author": "Ruslan Chudinov",
+    "repository": {
+        "type": "git",
+        "url": "https://example.com/TODO.git"
+    },
+    "engines": {
+        "vscode": "^1.80.0"
+    },
+    "version": "0.0.1",
+    "extensionDependencies": [
+        "ms-python.python"
+    ],
+    "categories": [
+        "Programming Languages"
+    ],
+    "activationEvents": [
+        "*"
+    ],
+    
+    
+    "main": "./out/extension.js",
+    "scripts": {
+        "vscode:prepublish": "npm run compile",
+        "compile": "tsc -p .",
+        "watch": "tsc -p . -w"
+    },
+    "devDependencies": {
+        "@types/node": "^20",
+        "@types/semver": "^7.5.0",
+        "@types/vscode": "^1.78.0",
+        "@typescript-eslint/eslint-plugin": "^5.3.0",
+        "@typescript-eslint/parser": "^5.3.0",
+        "eslint": "^8.2.0",
+        "typescript": "^5.1.0"
+    },
+    "dependencies": {
+        "@vscode/python-extension": "^1.0.4",
+        "semver": "^7.5.4",
+        "vscode-languageclient": "^8.1.0"
+    }
+}
