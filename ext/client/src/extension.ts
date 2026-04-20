@@ -3,22 +3,22 @@ import * as vscode from "vscode";
 import { LanguageClient, LanguageClientOptions, ServerOptions, Trace } from "vscode-languageclient/node";
 
 let client: LanguageClient;
-
+let extensionOutputChannel: vscode.OutputChannel;
 
 export async function activate(context: vscode.ExtensionContext) {
-    const outputChannel = vscode.window.createOutputChannel("CDM16 CLIENT")
-    outputChannel.show(true);
-    outputChannel.appendLine("Output channel working well!");
+    extensionOutputChannel = vscode.window.createOutputChannel("CDM16 Extension");
+    extensionOutputChannel.show(true);
+    extensionOutputChannel.appendLine("Output channel working well!");
 
     // relative path to python server from thin file
     const serverPath = context.asAbsolutePath(
         path.join("..", "server", "src", "server.py") 
     );
-    outputChannel.appendLine(`Path to the server ${serverPath}`)
+    extensionOutputChannel.appendLine(`Path to the server ${serverPath}`)
 
     // launch python server
     const serverOptions: ServerOptions = {
-        command: "/home/ruslan/Repos/cdm-devkit/ext/myenv/bin/python3",
+        command: "/home/ruslan/Repos/cdm-devkit/ext/venv/bin/python3",
         args: [serverPath],
         options: { cwd: path.dirname(serverPath) },
     };
@@ -40,11 +40,9 @@ export async function activate(context: vscode.ExtensionContext) {
 
     // Запускаем клиента
     await client.start();
-    outputChannel.appendLine("CDM16 LSP client started!");
+    extensionOutputChannel.appendLine("CDM16 LSP client started!");
 
-    // Добавляем клиента в подписки, чтобы VSCode мог корректно его остановить
     context.subscriptions.push(client);
-    vscode.window.showInformationMessage("CDM16 LSP client started!");
 }
 
 export async function deactivate(): Promise<void> {
