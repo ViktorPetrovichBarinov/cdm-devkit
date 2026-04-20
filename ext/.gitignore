@@ -1,0 +1,30 @@
+# Node modules
+node_modules/
+
+# Output of TypeScript compilation
+out/
+dist/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# MacOS
+.DS_Store
+
+# Python virtual environment
+ext/myenv/
+venv/
+__pycache__/
+*.pyc
+
+# Python LSP / test output
+*.log
+
+# Build artifacts / temporary files
+*.tmp
+*.swp
+*.swo
+*.bak

@@ -36,7 +36,6 @@ def get_syntax_tree(file_paths):
     
     for path in file_paths:
         decoded_path = unquote(path)
-        decoded_path = decoded_path[8:]
         path = Path(decoded_path)
         
         with path.open("rb") as binary_file:

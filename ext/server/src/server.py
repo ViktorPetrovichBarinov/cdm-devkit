@@ -4,9 +4,11 @@ from pygls.cli import start_server
 from pygls.lsp.server import LanguageServer
 from pygls.workspace import TextDocument
 
+
 import hover_utils
 import logging
 import re
+import logging
 
 from lsprotocol import types
 
@@ -15,6 +17,13 @@ from pygls.lsp.server import LanguageServer
 from pygls.workspace import TextDocument
 
 ADDITION = re.compile(r"^\s*(\d+)\s*\+\s*(\d+)\s*=\s*(\d+)?$")
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+)
+
+logger = logging.getLogger("cdm16.lsp")
 
 class InstructionInfo:
     def __init__(self, instruction: str, description: str, flags: str, affection: str, size: int):
@@ -35,10 +44,11 @@ class PullDiagnosticServer(LanguageServer):
         self.diagnostics = {}
 
     def parse(self, document: TextDocument):
-        _, previous = self.diagnostics.get(document.uri, (0, []))
+        logger.info(f"document.path: {document.path}")
+        _, previous = self.diagnostics.get(document.path, (0, []))
         diagnostics = []
         
-        res = hover_utils.get_syntax_tree([document.uri])
+        res = hover_utils.get_syntax_tree([document.path])
         if (len(res) != 0):
             message = res[1]
             idx = res[0] - 1
@@ -62,8 +72,24 @@ server = PullDiagnosticServer("diagnostic-server", "v1")
 @server.feature(types.TEXT_DOCUMENT_DID_OPEN)
 def did_open(ls: PullDiagnosticServer, params: types.DidOpenTextDocumentParams):
     """Parse each document when it is opened"""
-    doc = ls.workspace.get_text_document(params.text_document.uri)
-    ls.parse(doc)
+    
+    uri = params.text_document.uri
+    logger.info(f"DID_OPEN received for URI: {uri}")
+
+    try:
+        doc = ls.workspace.get_text_document(uri)
+        
+        logger.info(
+            f"Document loaded: path={doc.path}, "
+            f"lines={len(doc.lines)}, version={doc.version}"
+        )
+
+        ls.parse(doc)
+        logger.info("Parsing completed successfully")
+
+    except Exception as e:
+        logger.exception(f"Error during DID_OPEN handling: {e}")
+
 
 
 @server.feature(types.TEXT_DOCUMENT_DID_CHANGE)
