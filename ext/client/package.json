@@ -17,6 +17,98 @@
     "categories": [
         "Programming Languages"
     ],
+    "contributes": {
+        "configurationDefaults": {
+            "editor.semanticHighlighting.enabled": true,
+            "[Default Dark+]": {
+                "editor.semanticTokenColorCustomizations": {
+                    "enabled": true,
+                    "rules": {
+                        "comment": "#6A9955",
+                        "keyword": "#C586C0",
+                        "macro": "#DCDCAA",
+                        "type": "#4FC1FF",
+                        "function": "#D19A66",
+                        "parameter": "#00D4FF",
+                        "number": "#B5CEA8",
+                        "string": "#CE9178"
+                    }
+                }
+            },
+            "[Default Light+]": {
+                "editor.semanticTokenColorCustomizations": {
+                    "enabled": true,
+                    "rules": {
+                        "comment": "#008000",
+                        "keyword": "#AF00DB",
+                        "macro": "#795E26",
+                        "type": "#0451A5",
+                        "function": "#7A3E00",
+                        "parameter": "#0066BF",
+                        "number": "#098658",
+                        "string": "#A31515"
+                    }
+                }
+            },
+            "[Default High Contrast]": {
+                "editor.semanticTokenColorCustomizations": {
+                    "enabled": true,
+                    "rules": {
+                        "comment": "#7CA668",
+                        "keyword": "#C19CFF",
+                        "macro": "#FFD700",
+                        "type": "#4FC1FF",
+                        "function": "#FFB86C",
+                        "parameter": "#00FFFF",
+                        "number": "#B5CEA8",
+                        "string": "#F48771"
+                    }
+                }
+            },
+            "[Default High Contrast Light]": {
+                "editor.semanticTokenColorCustomizations": {
+                    "enabled": true,
+                    "rules": {
+                        "comment": "#006400",
+                        "keyword": "#7A00CC",
+                        "macro": "#8A5A00",
+                        "type": "#004E8C",
+                        "function": "#8C3F00",
+                        "parameter": "#005A9E",
+                        "number": "#0B6A3A",
+                        "string": "#9E1F1F"
+                    }
+                }
+            }
+        },
+        "configuration": {
+            "title": "CDM",
+            "properties": {
+                "cdm.dialect": {
+                    "type": "string",
+                    "default": "cdm16",
+                    "enum": ["cdm8", "cdm8e", "cdm16", "cdm16e"],
+                    "enumDescriptions": [
+                        "CDM8 dialect",
+                        "CDM8E dialect", 
+                        "CDM16 dialect",
+                        "CDM16E dialect"
+                    ],
+                    "description": "Select the CDM dialect to use for language server features."
+                },
+                "cdm.pythonPath": {
+                    "type": "string",
+                    "default": "",
+                    "description": "Optional: explicit path to the Python executable used to run the CDM language server. If empty, the extension will use the active interpreter selected by the Python extension."
+                },
+                "cdm.autoInstall": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Automatically create a private virtual environment for the extension and install Python dependencies on first run (and when requirements change)."
+                }
+            }
+        }
+    },
     "activationEvents": [
         "*"
     ],

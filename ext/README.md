@@ -1,131 +1,112 @@
-# Pygls Playground
+[English](./README.md) | [Русский](./README.ru.md)
 
-![Screenshot of the pygls-playground extension in action](https://user-images.githubusercontent.com/2675694/260591942-b7001a7b-3081-439d-b702-5f8a489856db.png)
+# CDM16 LSP: Syntax Highlighting
 
-This VSCode extension aims to serve two purposes.
+VSCode extension for CdM assembly syntax highlighting powered by a Python LSP server (`pygls`).
 
-- Provide an environment in which you can easily experiment with the pygls framework by trying some of our example servers - or by writing your own
+Current focus is `cdm8` highlighting via **Semantic Tokens**.
 
-- Provide a minimal example of what it takes to integrate a pygls powered language server into VSCode.
+## What This Extension Highlights
 
-For an example of a more complete VSCode client, including details on how to bundle your Python code with the VSCode extension itself you may also be interested in Microsoft's [template extension for Python tools](https://github.com/microsoft/vscode-python-tools-extension-template).
+The server classifies and returns semantic tokens for:
 
-## Setup
+- `comment` — line comments (`# ...`)
+- `keyword` — assembler keywords/directives control words (`asect`, `if`, `end`, ...)
+- `macro` — macro definitions and macro calls
+- `type` — labels and label references
+- `function` — instruction mnemonics
+- `parameter` — registers (`r0`, `r1`, ...)
+- `number` — numeric literals (`0x..`, `0b..`, decimal)
+- `string` — string/char literals
 
-### Install Server Dependencies
+## How Highlighting Works
 
-Open a terminal in the repository's root directory
+1. VSCode opens a source file handled by the extension.
+2. The extension starts Python LSP server (`server/src/server.py`).
+3. On `textDocument/semanticTokens/full`, the server tokenizes text using `cocas` lexer:
+   - `cocas.assembler.generated.AsmLexer`
+4. The server maps lexer tokens + target metadata to semantic token types:
+   - macros from `standard.mlb`
+   - directives from target `assembly_directives()`
+   - instructions from target handlers
+5. VSCode theme maps semantic token types to colors.
 
-1. Create a virtual environment
-   ```
-   python -m venv env
-   ```
+Implementation file: `server/src/semantic_tokens.py`
 
-1. Activate the environment
-   ```
-   source ./env/bin/activate
-   ```
+## Dialect
 
-1. Install `pygls`
-   ```
-   python -m pip install -e .
-   ```
+Dialect is controlled by VSCode setting:
 
-### Install Client Dependencies
+- `cdm.dialect`: `cdm8 | cdm8e | cdm16 | cdm16e`
 
-Open terminal in the same directory as this file and execute following commands:
+At the moment, highlighting behavior is tuned primarily for `cdm8`.
 
-1. Install node dependencies
+## User Color Customization
 
-   ```
-   npm install --no-save
-   ```
-1. Compile the extension
+Users can override colors in **User Settings (JSON)**:
 
-   ```
-   npm run compile
-   ```
-   Alternatively you can run `npm run watch` if you are going to be actively working on the extension itself.
-
-### Run Extension (VSCode v1.89+)
-
-> [!IMPORTANT]
-> In order for VSCode to recognise `pygls-playground` as a valid extension, you need to complete the setup steps above **before** opening this repo inside VSCode.
-> If you opened VSCode before compiling the extension, you will have to run the `Developer: Reload Window` command through the command palette (`Ctrl+Shift+P`)
-
-1. Open the `pygls` repository in VSCode
-
-1. Goto the `Extensions` tab (`Ctrl+Shift+X`), find the `pygls-playground` extension in the *Recommended* section (not by searching in the marketplace!) and click the `Install Workspace Extension` button.
-   **If the button only says "Install", you've not found the right version of this extension**
-
-1. You will need to make sure that VSCode is using a virtual environment that contains an installation of `pygls`.
-   The `Python: Select Interpreter` command can be used to pick the correct one.
-
-   Alternatively, you can set the `pygls.server.pythonPath` option in the `.vscode/settings.json` file
-
-### Run Extension (VSCode v1.88 and older)
-
-1. Open this directory in VS Code
-
-1. The playground relies on the [Python extension for VSCode](https://marketplace.visualstudio.com/items?itemName=ms-python.python) for choosing the appropriate Python environment in which to run the example language servers.
-   If you haven't already, you will need to install it and reload the window.
-
-1. Open the Run and Debug view (`ctrl + shift + D`)
-
-1. Select `Launch Client` and press `F5`, this will open a second VSCode window with the `pygls-playground` extension enabled.
-
-1. You will need to make sure that VSCode is using a virtual environment that contains an installation of `pygls`.
-   The `Python: Select Interpreter` command can be used to pick the correct one.
-
-   Alternatively, you can set the `pygls.server.pythonPath` option in the `.vscode/settings.json` file
-
-## Configuration
-
-By default, the `pygls-playground` extension is configured to run the example `code_actions.py` server which you can find in the `examples/servers` folder of this repository.
-(For best results, try opening the `examples/servers/workspace/sums.txt` file).
-
-However, the `.vscode/settings.json` file in this repository can be used alter this and more.
-
-### Selecting a server
-
-> [!TIP]
-> See the [README](../../../examples/servers/README.md) in the `examples/servers` folder for details on the available servers and which files they work best with.
-
-To select a different example server, change the `pygls.server.launchScript` setting to the name of the server you wish to run
-
-### Selecting the working directory
-
-> [!TIP]
-> Cryptic `Error: spawn /.../python ENOENT` messages are often due to the extension using an incorrect working directory.
-
-If everything works as expected, the `pygls-playground` extension **should** default to using the `examples/servers/` folder as its working directory.
-
-If this is not the case, or you want to change it to something else, you can change the `pygls.server.cwd` option
-
-### Selecting documents
-
-Language servers typically specialise in a relatively small number of file types, so a client will only ask a server about documents
-
-The `code_actions.py` example is intended to be used with `plaintext` files (e.g. the provided `sums.txt` file). To use a server with different file types you can modify the `pygls.client.documentSelector` option
-
-For example to use a server with `json` files:
-
-```
-"pygls.client.documentSelector": [
-    {
-        "scheme": "file",
-        "language": "json"
-    },
-],
+```json
+{
+  "editor.semanticTokenColorCustomizations": {
+    "enabled": true,
+    "rules": {
+      "comment": "#6A9955",
+      "keyword": "#C586C0",
+      "macro": "#DCDCAA",
+      "type": "#4FC1FF",
+      "function": "#D19A66",
+      "parameter": "#00D4FF",
+      "number": "#B5CEA8",
+      "string": "#CE9178"
+    }
+  }
+}
 ```
 
-You can find the full list of known language identifiers [here](https://code.visualstudio.com/docs/languages/identifiers#_known-language-identifiers).
+Theme-specific overrides are also supported via:
 
-See the [LSP Specification](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#documentFilter) for details on all the available options that can be passed to the `pygls.client.documentSelector` option.
+- `[Default Dark+]`
+- `[Default Light+]`
+- `[Default High Contrast]`
+- `[Default High Contrast Light]`
 
-### Debugging the server
+inside `editor.semanticTokenColorCustomizations`.
 
-To debug the language server set the `pygls.server.debug` option to `true`.
-The server should be restarted and the debugger connect automatically.
+## Development
 
-You can control the host and port that the debugger uses through the `pygls.server.debugHost` and `pygls.server.debugPort` options.
+### 1) Python dependencies
+
+From `ext/`:
+
+```bash
+python3 -m venv venv
+./venv/bin/pip install -r requirements.txt
+```
+
+### 2) Client dependencies
+
+From `ext/client/`:
+
+```bash
+npm install
+npm run compile
+```
+
+### 3) Run extension in Extension Host
+
+- Open `ext/` in VSCode
+- Run `Build & Run Extension` (F5)
+
+## Settings
+
+Extension settings in `client/package.json`:
+
+- `cdm.dialect` — target dialect for server features
+- `cdm.pythonPath` — explicit Python interpreter path (optional)
+- `cdm.autoInstall` — auto-create private venv and install deps (default: `true`)
+
+## Notes
+
+- Semantic highlighting requires VSCode semantic tokens support (enabled by default in modern VSCode).
+- Final colors always depend on active theme + user overrides.
+- If highlighting looks stale after changes, run `Developer: Reload Window`.

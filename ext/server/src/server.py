@@ -1,233 +1,118 @@
-from datetime import datetime
-from lsprotocol import types
-from pygls.cli import start_server
-from pygls.lsp.server import LanguageServer
-from pygls.workspace import TextDocument
-
-
-import hover_utils
-import logging
-import re
 import logging
 
+from pygls.lsp.server import LanguageServer
 from lsprotocol import types
 
-from pygls.cli import start_server
-from pygls.lsp.server import LanguageServer
-from pygls.workspace import TextDocument
+from ast_utils import try_build_and_format_ast
+from semantic_tokens import legend as semantic_legend, semantic_tokens_full
 
-ADDITION = re.compile(r"^\s*(\d+)\s*\+\s*(\d+)\s*=\s*(\d+)?$")
+server = LanguageServer("CDM-server", "v0.1")
 
+# Глобальная переменная для хранения диалекта
+current_dialect = "cdm16"
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
 )
 
-logger = logging.getLogger("cdm16.lsp")
+@server.feature(types.INITIALIZE)
+def initialize(params: types.InitializeParams):
+    global current_dialect
+    if params.initialization_options:
+        current_dialect = params.initialization_options.get('dialect', 'cdm16')
+    logging.info(f"CDM dialect set to: {current_dialect}")
 
-class InstructionInfo:
-    def __init__(self, instruction: str, description: str, flags: str, affection: str, size: int):
-        self.instruction = instruction        # Поле для инструкции
-        self.description = description        # Поле для описания
-        self.flags = flags                    # Поле для флагов
-        self.affection = affection            # Поле для влияния
-        self.size = size                      # Поле для размера (в байтах)
-
-    def __repr__(self):
-        return (f"InstructionInfo(instruction='{self.instruction}', "
-                f"description='{self.description}', flags='{self.flags}', "
-                f"affection='{self.affection}', size={self.size})")
-
-class PullDiagnosticServer(LanguageServer):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.diagnostics = {}
-
-    def parse(self, document: TextDocument):
-        logger.info(f"document.path: {document.path}")
-        _, previous = self.diagnostics.get(document.path, (0, []))
-        diagnostics = []
-        
-        res = hover_utils.get_syntax_tree([document.path])
-        if (len(res) != 0):
-            message = res[1]
-            idx = res[0] - 1
-            diagnostics.append(
-                types.Diagnostic(
-                        message=message,
-                        severity=types.DiagnosticSeverity.Error,
-                        range=types.Range(
-                            start=types.Position(line=idx, character=0),
-                            end=types.Position(line=idx, character=100),
-                        ),
-                    )
-                )
-        
-        if previous != diagnostics:
-            self.diagnostics[document.uri] = (document.version, diagnostics)
-
-
-server = PullDiagnosticServer("diagnostic-server", "v1")
-
-@server.feature(types.TEXT_DOCUMENT_DID_OPEN)
-def did_open(ls: PullDiagnosticServer, params: types.DidOpenTextDocumentParams):
-    """Parse each document when it is opened"""
-    
-    uri = params.text_document.uri
-    logger.info(f"DID_OPEN received for URI: {uri}")
-
-    try:
-        doc = ls.workspace.get_text_document(uri)
-        
-        logger.info(
-            f"Document loaded: path={doc.path}, "
-            f"lines={len(doc.lines)}, version={doc.version}"
-        )
-
-        ls.parse(doc)
-        logger.info("Parsing completed successfully")
-
-    except Exception as e:
-        logger.exception(f"Error during DID_OPEN handling: {e}")
-
-
-
-@server.feature(types.TEXT_DOCUMENT_DID_CHANGE)
-def did_change(ls: PullDiagnosticServer, params: types.DidOpenTextDocumentParams):
-    """Parse each document when it is changed"""
-    doc = ls.workspace.get_text_document(params.text_document.uri)
-    ls.parse(doc)
 
 @server.feature(
-    types.TEXT_DOCUMENT_DIAGNOSTIC,
-    types.DiagnosticOptions(
-        identifier="pull-diagnostics",
-        inter_file_dependencies=False,
-        workspace_diagnostics=False,
-    ),
+    types.TEXT_DOCUMENT_SEMANTIC_TOKENS_FULL,
+    semantic_legend(),
 )
-def diagnostic(ls: PullDiagnosticServer, params: types.DocumentDiagnosticParams):
-    if (uri := params.text_document.uri) not in ls.diagnostics:
+def semantic_tokens(params: types.SemanticTokensParams):
+    document = server.workspace.get_text_document(params.text_document.uri)
+    return semantic_tokens_full(document.source, current_dialect)
+
+
+@server.feature(types.TEXT_DOCUMENT_DID_SAVE)
+def did_save(params: types.DidSaveTextDocumentParams):
+    try:
+        document = server.workspace.get_text_document(params.text_document.uri)
+    except Exception as e:
+        logging.error("Failed to get document on save: %s", e)
         return
 
-    version, diagnostics = ls.diagnostics[uri]
-    result_id = f"{uri}@{version}"
-
-    if result_id == params.previous_result_id:
-        return types.UnchangedDocumentDiagnosticReport(result_id)
-
-    return types.FullDocumentDiagnosticReport(items=diagnostics, result_id=result_id)
-
-instruction_map = {
-    "ldw": InstructionInfo(
-        instruction="ldw rs, rd",
-        description="Load word. Loads 2 bytes from data memory pointed by rs to rd.",
-        flags="-",
-        affection="1-2",
-        size=2
-    ),
-    "ldb": InstructionInfo(
-        instruction="ldb rs, rd",
-        description="Load byte. Loads a byte from data memory pointed by rs to rd.",
-        flags="-",
-        affection="1-2",
-        size=2
-    ),
-    "ldsb": InstructionInfo(
-        instruction="ldsb rs, rd",
-        description="Load signed byte. Loads a byte from data memory pointed by rs to rd with sign-extend.",
-        flags="-",
-        affection="1-2",
-        size=2
+    ast_text, err = try_build_and_format_ast(
+        document.source,
+        uri=params.text_document.uri,
+        dialect=current_dialect,
+        max_chars=20000,
     )
-}
-
-# DATE_FORMATS = [
-#     "%H:%M:%S",
-#     "%d/%m/%y",
-#     "%Y-%m-%d",
-#     "%Y-%m-%dT%H:%M:%S",
-# ]
-
-# @server.feature(
-#     types.TEXT_DOCUMENT_COMPLETION,
-#     types.CompletionOptions(trigger_characters=["."]),
-# )
-# def completions(params: types.CompletionParams):
-#     document = server.workspace.get_text_document(params.text_document.uri)
-#     current_line = document.lines[params.position.line].strip()
-
-#     if not current_line.endswith("Hello."):
-#         return []
-
-#     return [
-#         types.CompletionItem(label="from server"),
-#         types.CompletionItem(label="how are you?"),
-#         types.CompletionItem(label="world."),
-#     ]
-
-def get_word_at_cursor(line: str, cursor_position: int) -> str:
-    # Удаляем пробелы в начале и конце строки
-    line = line.strip()
-    
-    # Если позиция курсора вне диапазона, возвращаем None
-    if cursor_position < 0 or cursor_position >= len(line):
-        return None
-
-    # Разделяем строку на слова по пробелам
-    words = line.split()
-    
-    # Пока не найдём слово, будем искать
-    current_position = 0
-    for word in words:
-        # Длина слова + пробел (если не последнее слово)
-        word_length = len(word)
-        
-        # Если позиция курсора внутри текущего слова
-        if current_position <= cursor_position < current_position + word_length:
-            return word
-        
-        # Переход на следующее слово
-        current_position += word_length + 1  # +1 для пробела
-
-    return None
+    if err is not None:
+        logging.error(
+            "AST build failed (%s) at %s:%s: %s",
+            err.tag.value if hasattr(err, "tag") else "error",
+            err.file,
+            err.line,
+            err.description,
+        )
+    else:
+        logging.info("AST dump for %s\n%s", params.text_document.uri, ast_text)
 
 
 @server.feature(
-    types.TEXT_DOCUMENT_HOVER
+    types.TEXT_DOCUMENT_COMPLETION,
+    types.CompletionOptions(trigger_characters=[" "]),
 )
-def hover(ls: LanguageServer, params: types.HoverParams):
-    pos = params.position
-    
-    document_uri = params.text_document.uri
-    document = ls.workspace.get_text_document(document_uri)
+def completions(params: types.CompletionParams):
+    document = server.workspace.get_text_document(params.text_document.uri)
+    current_line = document.lines[params.position.line].strip()
 
-    try:
-        line = document.lines[pos.line]
-    except IndexError:
-        return None
-    word = get_word_at_cursor(line, pos.character)
-    instruction_info = instruction_map[word]
-    
+    if current_line.endswith("ast"):
+        # Triggered by a space press. Remove the trailing "ast" token from the
+        # in-memory source before parsing so the command itself doesn't break parsing.
+        lines = document.source.splitlines(True)  # keep line endings
+        line_idx = params.position.line
+        if 0 <= line_idx < len(lines):
+            original = lines[line_idx]
+            # remove last occurrence of 'ast' at end of line (ignoring trailing whitespace)
+            stripped = original.rstrip("\r\n")
+            suffix_ws = stripped[len(stripped.rstrip()):]
+            core = stripped.rstrip()
+            if core.endswith("ast"):
+                core = core[: -len("ast")]
+                lines[line_idx] = core + suffix_ws + original[len(stripped):]
 
-    hover_content = [
-        f"# Инструкция: {instruction_info.instruction}",
-        "",
-        f"**Описание:** {instruction_info.description}\n",
-        f"**Флаги:** {instruction_info.flags}\n",
-        f"**Влияние:** {instruction_info.affection}\n",
-        f"**Размер:** {instruction_info.size} байт\n",
+        sanitized_source = "".join(lines)
+
+        ast_text, err = try_build_and_format_ast(
+            sanitized_source,
+            uri=params.text_document.uri,
+            dialect=current_dialect,
+            max_chars=20000,
+        )
+        if err is not None:
+            logging.error(
+                "AST build failed (%s) at %s:%s: %s",
+                err.tag.value if hasattr(err, "tag") else "error",
+                err.file,
+                err.line,
+                err.description,
+            )
+        else:
+            logging.info("AST dump for %s\n%s", params.text_document.uri, ast_text)
+
+        return [
+            types.CompletionItem(label="dumped_ast_to_log"),
+            types.CompletionItem(label="(see Output: CDM-server)"),
+        ]
+
+    if not current_line.endswith("hello."):
+        return []
+
+    return [
+        types.CompletionItem(label="world"),
+        types.CompletionItem(label="friend"),
     ]
-    return types.Hover(
-        contents=types.MarkupContent(
-            kind=types.MarkupKind.Markdown,
-            value="\n".join(hover_content),
-        ),
-        range=types.Range(
-            start=types.Position(line=pos.line, character=0),
-            end=types.Position(line=pos.line + 1, character=0),
-        ),
-    )
+
 
 if __name__ == "__main__":
     server.start_io()
