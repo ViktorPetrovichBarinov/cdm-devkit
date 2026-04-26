@@ -1,283 +1,441 @@
-from dataclasses import dataclass
-from functools import lru_cache
-from pathlib import Path
-from typing import Iterable
+from __future__ import annotations
 
-from antlr4 import InputStream
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Iterable, Optional
+
+from antlr4 import CommonTokenStream, InputStream
+from antlr4.error.ErrorListener import ErrorListener
 from lsprotocol import types
 
-from cocas.assembler.generated import AsmLexer
+from cocas.assembler.generated import AsmLexer, AsmParser, AsmParserVisitor
+from cocas.assembler.macro_processor import MacroDefinition, read_mlb
+from cocas.assembler.targets import import_target, standard_mlb
 
 
-# Use standard semantic token types so themes color them naturally.
-TOKEN_TYPES = [
-    "comment",   # line comments
-    "keyword",   # directives + control keywords
-    "macro",     # macro definitions/calls
-    "type",      # labels (use broadly-supported type for compatibility)
-    "function",  # CPU instructions
-    "parameter", # registers
+TOKEN_TYPES: list[str] = [
+    # Keep this small and stable; VSCode maps these to colors.
+    "comment",
+    "keyword",
+    "macro",
+    "type",  # labels
+    "function",  # instruction mnemonics
+    "parameter",  # registers
     "number",
     "string",
 ]
 
-KEYWORD_TOKEN_NAMES = {
-    "Asect",
-    "Break",
-    "Continue",
-    "Do",
-    "Else",
-    "End",
-    "Ext",
-    "Fi",
-    "If",
-    "Is",
-    "Macro",
-    "Rsect",
-    "Stays",
-    "Then",
-    "Tplate",
-    "Until",
-    "Wend",
-    "While",
-}
+TOKEN_TYPE_TO_INDEX = {t: i for i, t in enumerate(TOKEN_TYPES)}
 
-NAME_TOKEN_NAMES = KEYWORD_TOKEN_NAMES | {"WORD", "WORD_WITH_DOTS"}
+# NOTE: legend must be an lsprotocol object (not a dict), otherwise server capabilities
+# serialization fails (cattrs expects .token_types / .token_modifiers attributes).
+legend = types.SemanticTokensLegend(token_types=TOKEN_TYPES, token_modifiers=[])
 
 
 @dataclass(frozen=True)
 class _Tok:
-    line: int
-    col: int
-    text: str
-    type_name: str
-
-
-@dataclass(frozen=True)
-class _Semantic:
-    line: int
-    col: int
+    line: int  # 0-based
+    col: int  # 0-based
     length: int
-    token_type: str
+    token_type: int
+    token_mods: int = 0
 
 
-def legend() -> types.SemanticTokensLegend:
-    return types.SemanticTokensLegend(token_types=TOKEN_TYPES, token_modifiers=[])
-
-
-@lru_cache(maxsize=32)
-def _dialect_sets(dialect: str) -> tuple[set[str], set[str], set[str]]:
-    """
-    Returns (macros, directives, instructions) for a dialect from cocas internals.
-    """
-    macros: set[str] = set()
-    directives: set[str] = set()
-    instructions: set[str] = set()
-    target_name = (dialect or "cdm8").lower()
-
-    try:
-        from cocas.assembler.macro_processor import read_mlb
-        from cocas.assembler.targets import import_target, standard_mlb
-
-        target = import_target(target_name)
-        directives = set(target.assembly_directives())
-
-        macro_map = read_mlb(standard_mlb(target_name))
-        macros = set(macro_map.keys())
-
-        # Collect instruction mnemonics from target handlers.
-        module = __import__(
-            f"cocas.assembler.targets.{target_name}.target_instructions",
-            fromlist=["handlers"],
-        )
-        for h in getattr(module, "handlers", []):
-            instr_map = getattr(h, "instructions", None)
-            if isinstance(instr_map, dict):
-                instructions.update(instr_map.keys())
-    except Exception:
-        # Keep empty fallback sets to avoid crashing semantic tokens.
-        pass
-
-    instructions.difference_update(directives)
-    return macros, directives, instructions
-
-
-def _antlr_tokens(text: str) -> list[_Tok]:
-    lexer = AsmLexer(InputStream(text))
-    out: list[_Tok] = []
-    for t in lexer.getAllTokens():
-        token_type_name = AsmLexer.symbolicNames[t.type]
-        out.append(_Tok(line=t.line - 1, col=t.column, text=t.text or "", type_name=token_type_name))
-    return out
-
-
-def _split_by_line(tokens: list[_Tok]) -> dict[int, list[_Tok]]:
-    m: dict[int, list[_Tok]] = {}
-    for t in tokens:
-        m.setdefault(t.line, []).append(t)
-    for line in m:
-        m[line].sort(key=lambda x: x.col)
-    return m
-
-
-def _find_mnemonic_index(line_tokens: list[_Tok]) -> int | None:
-    """
-    Find index of line mnemonic token according to grammar shape:
-    labels_declaration? instruction arguments?
-    where instruction is WORD.
-    """
-    if not line_tokens:
-        return None
-
-    i = 0
-    # Optional labels_declaration at line start:
-    # labels (COMMA labels)* (COLON | ANGLE_BRACKET)
-    start = i
-    if i < len(line_tokens) and line_tokens[i].type_name in NAME_TOKEN_NAMES:
-        i += 1
-        while i + 1 < len(line_tokens) and line_tokens[i].type_name == "COMMA" and line_tokens[i + 1].type_name in NAME_TOKEN_NAMES:
-            i += 2
-        if i < len(line_tokens) and line_tokens[i].type_name in {"COLON", "ANGLE_BRACKET"}:
-            i += 1
-        else:
-            i = start
-
-    # First WORD after optional label-declaration is mnemonic.
-    if i < len(line_tokens) and line_tokens[i].type_name == "WORD":
-        return i
-    return None
-
-
-def _label_declaration_indices(line_tokens: list[_Tok]) -> list[int]:
-    """
-    Returns token indices for labels in leading labels_declaration:
-    labels (COMMA labels)* (COLON | ANGLE_BRACKET)
-    """
-    if not line_tokens:
-        return []
-
-    indices: list[int] = []
-    i = 0
-
-    if i >= len(line_tokens) or line_tokens[i].type_name not in NAME_TOKEN_NAMES:
-        return []
-
-    indices.append(i)
-    i += 1
-
-    while i + 1 < len(line_tokens) and line_tokens[i].type_name == "COMMA" and line_tokens[i + 1].type_name in NAME_TOKEN_NAMES:
-        indices.append(i + 1)
-        i += 2
-
-    if i < len(line_tokens) and line_tokens[i].type_name in {"COLON", "ANGLE_BRACKET"}:
-        return indices
-
-    return []
-
-
-def _semantic_for_token(t: _Tok) -> str | None:
-    if t.type_name in KEYWORD_TOKEN_NAMES:
-        return "keyword"
-    if t.type_name == "REGISTER":
-        return "parameter"
-    if t.type_name in {"DECIMAL_NUMBER", "HEX_NUMBER", "BINARY_NUMBER"}:
-        return "number"
-    if t.type_name in {"STRING", "CHAR"}:
-        return "string"
-    if t.type_name == "WORD_WITH_DOTS":
-        return "type"
-    return None
-
-
-def _line_comment_tokens(text: str) -> list[_Semantic]:
-    out: list[_Semantic] = []
-    for i, line in enumerate(text.splitlines()):
-        idx = line.find("#")
-        if idx >= 0:
-            out.append(_Semantic(i, idx, len(line) - idx, "comment"))
-    return out
-
-
-def tokenize_semantic(text: str, dialect: str) -> list[_Semantic]:
-    macros, directives, instructions = _dialect_sets(dialect)
-    toks = _antlr_tokens(text)
-    by_line = _split_by_line(toks)
-
-    semantic: list[_Semantic] = []
-
-    # Comments are skipped by lexer grammar, so add them manually.
-    semantic.extend(_line_comment_tokens(text))
-
-    for line, line_tokens in by_line.items():
-        mnemonic_idx = _find_mnemonic_index(line_tokens)
-        label_indices = set(_label_declaration_indices(line_tokens))
-
-        for idx, t in enumerate(line_tokens):
-            if idx in label_indices:
-                semantic.append(_Semantic(line, t.col, len(t.text), "type"))
-
-            typ = _semantic_for_token(t)
-            if typ is not None:
-                semantic.append(_Semantic(line, t.col, len(t.text), typ))
-
-            if mnemonic_idx is not None and idx == mnemonic_idx:
-                mn = t.text
-                if mn in macros:
-                    semantic.append(_Semantic(line, t.col, len(mn), "macro"))
-                elif mn in directives:
-                    semantic.append(_Semantic(line, t.col, len(mn), "keyword"))
-                elif mn in instructions or mn.startswith("b"):
-                    semantic.append(_Semantic(line, t.col, len(mn), "function"))
-
-            # Label references in instruction arguments (e.g. `jsr func`, `ldi r0, computed_func`)
-            # are plain WORD/WORD_WITH_DOTS tokens after mnemonic position.
-            if (
-                mnemonic_idx is not None
-                and idx > mnemonic_idx
-                and t.type_name in {"WORD", "WORD_WITH_DOTS"}
-            ):
-                semantic.append(_Semantic(line, t.col, len(t.text), "type"))
-
-        # Macro definition token: *name/arity (first WORD after ASTERISK at line start).
-        if (
-            len(line_tokens) >= 3
-            and line_tokens[0].type_name == "ASTERISK"
-            and line_tokens[1].type_name == "WORD"
-        ):
-            semantic.append(
-                _Semantic(line, line_tokens[1].col, len(line_tokens[1].text), "macro")
-            )
-
-    semantic.sort(key=lambda x: (x.line, x.col, x.length, x.token_type))
-    return semantic
-
-
-def encode(tokens: Iterable[_Semantic]) -> list[int]:
-    type_idx = {name: i for i, name in enumerate(TOKEN_TYPES)}
+def _encode(tokens: list[_Tok]) -> list[int]:
+    # LSP SemanticTokens: [deltaLine, deltaStart, length, tokenType, tokenModifiers]...
+    tokens.sort(key=lambda t: (t.line, t.col))
     data: list[int] = []
     prev_line = 0
     prev_col = 0
-    first = True
-
     for t in tokens:
-        idx = type_idx.get(t.token_type)
-        if idx is None or t.length <= 0:
-            continue
-        if first:
-            delta_line = t.line
-            delta_col = t.col
-            first = False
-        else:
-            delta_line = t.line - prev_line
-            delta_col = t.col - (prev_col if delta_line == 0 else 0)
-
-        data.extend([delta_line, delta_col, t.length, idx, 0])
+        dl = t.line - prev_line
+        dc = t.col - (prev_col if dl == 0 else 0)
+        data.extend([dl, dc, t.length, t.token_type, t.token_mods])
         prev_line = t.line
         prev_col = t.col
-
     return data
 
 
-def semantic_tokens_full(text: str, dialect: str) -> types.SemanticTokens:
-    return types.SemanticTokens(data=encode(tokenize_semantic(text, dialect)))
+class _SilentErrorListener(ErrorListener):
+    def syntaxError(self, recognizer, offendingSymbol, line, column, msg, e):  # noqa: N802
+        # Never raise from semantic highlighting; keep it best-effort.
+        return
+
+
+def _iter_comment_spans(text: str) -> Iterable[tuple[int, int, int]]:
+    """
+    Yield (line0, col0, length) for '#' comments.
+
+    The assembler lexer skips COMMENT tokens, so for editor highlighting we scan the raw text.
+    We try to avoid treating '#' inside quotes as a comment, with a small state machine.
+    """
+    for line0, line in enumerate(text.splitlines()):
+        in_s = False
+        in_d = False
+        esc = False
+        for i, ch in enumerate(line):
+            if esc:
+                esc = False
+                continue
+            if ch == "\\":
+                esc = True
+                continue
+            if not in_d and ch == "'":
+                in_s = not in_s
+                continue
+            if not in_s and ch == '"':
+                in_d = not in_d
+                continue
+            if not in_s and not in_d and ch == "#":
+                yield (line0, i, len(line) - i)
+                break
+
+
+def _load_standard_macros(target: str) -> dict[str, dict[int, MacroDefinition]]:
+    # standard_mlb(target) points into cocas package targets.
+    return read_mlb(standard_mlb(target))
+
+
+def _load_local_macro_names(text: str, filepath: str) -> set[str]:
+    """
+    Parse the file with Macro.g4 to find macro definitions in the current file.
+    We only need names for highlighting (not bodies).
+    """
+    from antlr4 import CommonTokenStream
+
+    from cocas.assembler.generated import MacroLexer, MacroParser
+
+    src = text if text.endswith("\n") else text + "\n"
+    lexer = MacroLexer(InputStream(src))
+    token_stream = CommonTokenStream(lexer)
+    parser = MacroParser(token_stream)
+    tree = parser.program()
+
+    names: set[str] = set()
+
+    # Walk the parse tree without relying on generated visitor base classes
+    # (keep it robust across regenerations).
+    def walk(node):
+        # Macro header: 'macro' NAME '/' DIGIT
+        if node.__class__.__name__ == "MacroContext":
+            header = getattr(node, "macro_header", lambda: None)()
+            if header is not None:
+                name_tok = getattr(header, "NAME", lambda: None)()
+                if name_tok is not None:
+                    names.add(name_tok.getText())
+        for c in getattr(node, "children", []) or []:
+            walk(c)
+
+    walk(tree)
+    _ = filepath
+    return names
+
+
+class _AsmEntityVisitor(AsmParserVisitor):
+    def __init__(
+        self,
+        token_stream: CommonTokenStream,
+        keywords: set[str],
+        directives: set[str],
+        macro_names: set[str],
+    ):
+        super().__init__()
+        self._ts = token_stream
+        self._keywords = keywords
+        self._directives = directives
+        self._macro_names = macro_names
+        self.tokens: list[_Tok] = []
+        # Keyword-like terminals in the lexer grammar.
+        # Highlight these regardless of where they appear in the CST.
+        self._keyword_token_types: set[int] = {
+            AsmLexer.Asect,
+            AsmLexer.Break,
+            AsmLexer.Continue,
+            AsmLexer.Do,
+            AsmLexer.Else,
+            AsmLexer.End,
+            AsmLexer.Ext,
+            AsmLexer.Fi,
+            AsmLexer.If,
+            AsmLexer.Is,
+            AsmLexer.Macro,
+            AsmLexer.Rsect,
+            AsmLexer.Stays,
+            AsmLexer.Then,
+            AsmLexer.Tplate,
+            AsmLexer.Until,
+            AsmLexer.Wend,
+            AsmLexer.While,
+        }
+
+    def _add_tok(self, tok, token_type: str):
+        if tok is None:
+            return
+        t = TOKEN_TYPE_TO_INDEX[token_type]
+        line0 = int(tok.line) - 1
+        col0 = int(getattr(tok, "column", 0) or 0)
+        text = tok.text or ""
+        if line0 >= 0 and len(text) > 0:
+            self.tokens.append(_Tok(line0, col0, len(text), t))
+
+    def _add_terminal(self, term, token_type: str):
+        # term is a TerminalNodeImpl (from antlr4); getSymbol() is the token.
+        if term is None:
+            return
+        tok = getattr(term, "symbol", None) or getattr(term, "getSymbol", lambda: None)()
+        self._add_tok(tok, token_type)
+
+    def visitTerminal(self, node):  # noqa: N802
+        """
+        Catch-all for keyword terminals like 'asect', 'end', 'if', 'else', ...
+        """
+        tok = getattr(node, "symbol", None) or getattr(node, "getSymbol", lambda: None)()
+        if tok is not None and getattr(tok, "type", None) in self._keyword_token_types:
+            self._add_tok(tok, "keyword")
+        return super().visitTerminal(node)
+
+    def visitProgram_nomacros(self, ctx: AsmParser.Program_nomacrosContext):
+        # Highlight final 'end'
+        try:
+            self._add_terminal(getattr(ctx, "End", lambda: None)(), "keyword")
+        except Exception:
+            pass
+        return self.visitChildren(ctx)
+
+    def visitAsect_header(self, ctx: AsmParser.Asect_headerContext):
+        self._add_tok(ctx.start, "keyword")  # 'asect'
+        return self.visitChildren(ctx)
+
+    def visitRsect_header(self, ctx: AsmParser.Rsect_headerContext):
+        self._add_tok(ctx.start, "keyword")  # 'rsect'
+        return self.visitChildren(ctx)
+
+    def visitTplate_header(self, ctx: AsmParser.Tplate_headerContext):
+        self._add_tok(ctx.start, "keyword")  # 'tplate'
+        return self.visitChildren(ctx)
+
+    def visitBreak_statement(self, ctx: AsmParser.Break_statementContext):
+        self._add_tok(ctx.start, "keyword")  # 'break'
+        return self.visitChildren(ctx)
+
+    def visitContinue_statement(self, ctx: AsmParser.Continue_statementContext):
+        self._add_tok(ctx.start, "keyword")  # 'continue'
+        return self.visitChildren(ctx)
+
+    def visitConditional(self, ctx: AsmParser.ConditionalContext):
+        # if ... else ... fi
+        self._add_tok(ctx.start, "keyword")  # 'if'
+        # Else/Fi/Then/Is are handled in their specific contexts too,
+        # but we keep Fi here since it's always present.
+        self._add_terminal(getattr(ctx, "Fi", lambda: None)(), "keyword")
+        return self.visitChildren(ctx)
+
+    def visitConditions(self, ctx: AsmParser.ConditionsContext):
+        # optional "then" keyword at the end of conditions
+        self._add_terminal(getattr(ctx, "Then", lambda: None)(), "keyword")
+        return self.visitChildren(ctx)
+
+    def visitCondition(self, ctx: AsmParser.ConditionContext):
+        # "... is <branch_mnemonic>"
+        self._add_terminal(getattr(ctx, "Is", lambda: None)(), "keyword")
+        return self.visitChildren(ctx)
+
+    def visitElse_clause(self, ctx: AsmParser.Else_clauseContext):
+        # "else" starts the clause
+        self._add_tok(ctx.start, "keyword")
+        return self.visitChildren(ctx)
+
+    def visitWhile_loop(self, ctx: AsmParser.While_loopContext):
+        self._add_tok(ctx.start, "keyword")  # 'while'
+        self._add_terminal(getattr(ctx, "Stays", lambda: None)(), "keyword")
+        self._add_terminal(getattr(ctx, "Wend", lambda: None)(), "keyword")
+        return self.visitChildren(ctx)
+
+    def visitUntil_loop(self, ctx: AsmParser.Until_loopContext):
+        self._add_tok(ctx.start, "keyword")  # 'do'
+        self._add_terminal(getattr(ctx, "Until", lambda: None)(), "keyword")
+        return self.visitChildren(ctx)
+
+    # label declarations: (labels_declaration (labels (label (name ...))) :)
+    def visitLabels_declaration(self, ctx: AsmParser.Labels_declarationContext):
+        labels_ctx = ctx.labels()
+        for lab in labels_ctx.label():
+            name_ctx = lab.name()
+            self._add_tok(name_ctx.start, "type")
+        return self.visitChildren(ctx)
+
+    # instruction: single WORD-like token
+    def visitInstruction(self, ctx: AsmParser.InstructionContext):
+        tok = ctx.start
+        if tok is None:
+            return self.visitChildren(ctx)
+        text = tok.text or ""
+        low = text.lower()
+
+        if low in self._keywords or low in self._directives:
+            self._add_tok(tok, "keyword")
+        elif low in {"save", "restore"}:
+            # In some dialects these are implemented as macros/pseudo-ops.
+            self._add_tok(tok, "macro")
+        elif low in self._macro_names:
+            self._add_tok(tok, "macro")
+        else:
+            self._add_tok(tok, "function")
+        return self.visitChildren(ctx)
+
+    def visitRegister(self, ctx: AsmParser.RegisterContext):
+        self._add_tok(ctx.start, "parameter")
+        return self.visitChildren(ctx)
+
+    def visitByte_specifier(self, ctx: AsmParser.Byte_specifierContext):
+        # low(expr) / high(expr) — assembler byte specifiers (cdm8e)
+        self._add_tok(ctx.start, "keyword")
+        return self.visitChildren(ctx)
+
+    def visitNumber(self, ctx: AsmParser.NumberContext):
+        self._add_tok(ctx.start, "number")
+        return self.visitChildren(ctx)
+
+    def visitString(self, ctx: AsmParser.StringContext):
+        self._add_tok(ctx.start, "string")
+        return self.visitChildren(ctx)
+
+    def visitCharacter(self, ctx: AsmParser.CharacterContext):
+        self._add_tok(ctx.start, "string")
+        return self.visitChildren(ctx)
+
+    # label references inside expressions: (label (name ...))
+    def visitLabel(self, ctx: AsmParser.LabelContext):
+        name_ctx = ctx.name()
+        self._add_tok(name_ctx.start, "type")
+        return self.visitChildren(ctx)
+
+
+def semantic_tokens_full(text: str, *, uri: str, target: str) -> types.SemanticTokens:
+    """
+    Compute semantic tokens for one document.
+
+    We use:
+    - CST (AsmParser.program_nomacros) for structural positions (instructions/labels/regs/numbers/strings/keywords)
+    - Macro.g4 for local macro definitions
+    - standard.mlb for standard macro names
+    - raw scanning for comments ('# ...')
+    """
+    parsed = Path(uri) if "://" not in uri else None
+    filepath_hint = parsed.as_posix() if parsed else uri
+
+    # Load macro names (standard + local).
+    macro_names: set[str] = set()
+    try:
+        std = _load_standard_macros(target)
+        macro_names |= set(std.keys())
+    except Exception:
+        # If target isn't available, still highlight local macros etc.
+        pass
+    try:
+        macro_names |= _load_local_macro_names(text, filepath_hint)
+    except Exception:
+        pass
+
+    # Keywords/directives.
+    keywords = {
+        "asect",
+        "rsect",
+        "tplate",
+        "macro",
+        "mend",
+        "end",
+        "if",
+        "then",
+        "else",
+        "fi",
+        "while",
+        "wend",
+        "until",
+        "do",
+        "break",
+        "continue",
+        "stays",
+        "ext",
+        "is",
+    }
+    # byte specifiers (cdm8e)
+    keywords |= {"low", "high"}
+
+    directives = {"ds", "dc", "db", "dw", "align"}
+    try:
+        ti = import_target(target)
+        directives |= set(ti.assembly_directives())
+        directives.add("align")
+    except Exception:
+        pass
+
+    visitor_tokens: list[_Tok] = []
+
+    # Parse CST (best-effort). If parsing fails for an incomplete buffer (e.g. no `end`),
+    # fall back to lexer-based highlighting.
+    try:
+        parse_text = text
+        if not parse_text.endswith("\n"):
+            parse_text += "\n"
+        # Make the grammar tolerant to incomplete buffers.
+        parse_text += "end\n"
+
+        lexer = AsmLexer(InputStream(parse_text))
+        lexer.removeErrorListeners()
+        lexer.addErrorListener(_SilentErrorListener())
+        token_stream = CommonTokenStream(lexer)
+        token_stream.fill()
+        parser = AsmParser(token_stream)
+        parser.removeErrorListeners()
+        parser.addErrorListener(_SilentErrorListener())
+        tree = parser.program_nomacros()
+
+        v = _AsmEntityVisitor(token_stream, keywords, directives, macro_names)
+        v.visit(tree)
+        visitor_tokens.extend(v.tokens)
+    except Exception:
+        # Fallback: use lexer tokens directly on the raw text (no virtual 'end').
+        lx = AsmLexer(InputStream(text if text.endswith("\n") else text + "\n"))
+        lx.removeErrorListeners()
+        lx.addErrorListener(_SilentErrorListener())
+        ts = CommonTokenStream(lx)
+        ts.fill()
+        for tok in ts.tokens:
+            if tok is None or tok.text is None:
+                continue
+            # Skip virtual EOF and skipped channels (WS/COMMENT are skipped in lexer anyway).
+            if tok.type <= 0:
+                continue
+            line0 = int(tok.line) - 1
+            col0 = int(getattr(tok, "column", 0) or 0)
+            ttext = tok.text
+            low = ttext.lower()
+
+            if tok.type == AsmLexer.REGISTER:
+                visitor_tokens.append(_Tok(line0, col0, len(ttext), TOKEN_TYPE_TO_INDEX["parameter"]))
+            elif tok.type in (AsmLexer.DECIMAL_NUMBER, AsmLexer.HEX_NUMBER, AsmLexer.BINARY_NUMBER):
+                visitor_tokens.append(_Tok(line0, col0, len(ttext), TOKEN_TYPE_TO_INDEX["number"]))
+            elif tok.type in (AsmLexer.STRING, AsmLexer.CHAR):
+                visitor_tokens.append(_Tok(line0, col0, len(ttext), TOKEN_TYPE_TO_INDEX["string"]))
+            elif tok.type in (AsmLexer.Asect, AsmLexer.Rsect, AsmLexer.Tplate, AsmLexer.End,
+                              AsmLexer.If, AsmLexer.Then, AsmLexer.Else, AsmLexer.Fi,
+                              AsmLexer.While, AsmLexer.Wend, AsmLexer.Do, AsmLexer.Until,
+                              AsmLexer.Break, AsmLexer.Continue, AsmLexer.Ext, AsmLexer.Is, AsmLexer.Stays,
+                              AsmLexer.Macro):
+                visitor_tokens.append(_Tok(line0, col0, len(ttext), TOKEN_TYPE_TO_INDEX["keyword"]))
+            elif tok.type in (AsmLexer.WORD, AsmLexer.WORD_WITH_DOTS):
+                if low in directives or low in keywords:
+                    visitor_tokens.append(_Tok(line0, col0, len(ttext), TOKEN_TYPE_TO_INDEX["keyword"]))
+                elif low in {"save", "restore"} or low in macro_names:
+                    visitor_tokens.append(_Tok(line0, col0, len(ttext), TOKEN_TYPE_TO_INDEX["macro"]))
+                else:
+                    # Best-effort: treat as mnemonic/identifier
+                    visitor_tokens.append(_Tok(line0, col0, len(ttext), TOKEN_TYPE_TO_INDEX["function"]))
+
+    # Comments (raw scan) — do this on original text to keep positions accurate.
+    for line0, col0, length in _iter_comment_spans(text):
+        visitor_tokens.append(_Tok(line0, col0, length, TOKEN_TYPE_TO_INDEX["comment"]))
+
+    return types.SemanticTokens(data=_encode(visitor_tokens))
 

@@ -168,7 +168,10 @@ export async function activate(context: vscode.ExtensionContext) {
     extensionOutputChannel.appendLine(`CDM dialect from config: ${dialect}`);
 
     const clientOptions: LanguageClientOptions = {
-        documentSelector: [{ scheme: "file", language: "*" }],
+        documentSelector: [
+            { scheme: "file", pattern: "**/*.asm" },
+            { scheme: "file", pattern: "**/*.mlb" },
+        ],
         outputChannel: vscode.window.createOutputChannel("CDM16 LSP"),
         initializationOptions: {
             dialect: dialect
