@@ -1,0 +1,9 @@
+{
+  "meta": {
+    "target": "cdm16e",
+    "source_manual": "",
+    "note": "Заготовка для hover-подсказок (cdm16e). Заполняйте mnemonics: ключ — мнемоника в нижнем регистре, поля description, syntax, example; опционально category.",
+    "mnemonic_count": 0
+  },
+  "mnemonics": {}
+}

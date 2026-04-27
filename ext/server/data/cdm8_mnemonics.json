@@ -1,0 +1,9 @@
+{
+  "meta": {
+    "target": "cdm8",
+    "source_manual": "",
+    "note": "Заготовка для hover-подсказок (cdm8). Заполняйте mnemonics: ключ — мнемоника в нижнем регистре, поля description, syntax, example; опционально category.",
+    "mnemonic_count": 0
+  },
+  "mnemonics": {}
+}

@@ -2,7 +2,7 @@
   "meta": {
     "target": "cdm8e",
     "source_manual": "main-1.pdf — CdM-8e Programmer's manual v0.1 (reference)",
-    "note": "Source of truth for hover text: edit mnemonics below; server/data/cdm8e_mnemonics.json is loaded by hover_help.py.",
+    "note": "Hover для cdm8e: правьте mnemonics ниже. Другие диалекты: cdm8_mnemonics.json, cdm16_mnemonics.json, cdm16e_mnemonics.json (см. hover_help.py).",
     "mnemonic_count": 114
   },
   "mnemonics": {
