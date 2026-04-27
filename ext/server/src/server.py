@@ -7,6 +7,7 @@ from lsprotocol import types
 
 from ast_utils import ast_file_to_string
 from cst_utils import cst_file_to_string
+from hover_help import hover_for_word, word_at_cursor
 from semantic_tokens import legend as semantic_legend, semantic_tokens_full
 
 server = LanguageServer("CDM-server", "v0.1")
@@ -56,6 +57,21 @@ def did_save(params: types.DidSaveTextDocumentParams):
 def semantic_tokens_full_handler(params: types.SemanticTokensParams) -> types.SemanticTokens:
     doc = server.workspace.get_text_document(params.text_document.uri)
     return semantic_tokens_full(doc.source, uri=params.text_document.uri, target=_dialect)
+
+
+@server.feature(types.TEXT_DOCUMENT_HOVER, types.HoverOptions())
+def hover(params: types.HoverParams):
+    if _dialect != "cdm8e":
+        return None
+    doc = server.workspace.get_text_document(params.text_document.uri)
+    try:
+        line = doc.lines[params.position.line]
+    except IndexError:
+        return None
+    word = word_at_cursor(line, params.position.character)
+    if not word:
+        return None
+    return hover_for_word(word, dialect=_dialect)
 
 
 @server.feature(

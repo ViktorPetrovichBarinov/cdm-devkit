@@ -1,0 +1,694 @@
+{
+  "meta": {
+    "target": "cdm8e",
+    "source_manual": "main-1.pdf — CdM-8e Programmer's manual v0.1 (reference)",
+    "note": "Source of truth for hover text: edit mnemonics below; server/data/cdm8e_mnemonics.json is loaded by hover_help.py.",
+    "mnemonic_count": 114
+  },
+  "mnemonics": {
+    "add": {
+      "description": "Add rn and rm into rm; C,V,Z,N updated.",
+      "syntax": "add rn, rm",
+      "example": "add r0, r1",
+      "category": "arithmetic"
+    },
+    "addc": {
+      "description": "Add rn, rm, and carry C into rm (multi-byte arithmetic). C,V,Z,N updated.",
+      "syntax": "addc rn, rm",
+      "example": "addc r0, r1",
+      "category": "arithmetic"
+    },
+    "addsp": {
+      "description": "Add const to SP (stack pointer). Flags unchanged.",
+      "syntax": "addsp const",
+      "example": "addsp 4",
+      "category": "stack"
+    },
+    "and": {
+      "description": "Bitwise AND rn with rm into rm. Z,N reflect result; C,V cleared.",
+      "syntax": "and rn, rm",
+      "example": "and r0, r1",
+      "category": "arithmetic"
+    },
+    "asect": {
+      "description": "Start an absolute section: following code is placed at the given base address in address space.",
+      "syntax": "asect addr_expr",
+      "example": "asect 0x0100",
+      "category": "assembler"
+    },
+    "banything": {
+      "description": "Unconditional relative branch (always). Alias nop/branches listed share opcode space. Mnemonic aliases: br, banything, btrue.",
+      "syntax": "b<cond> const",
+      "example": "bz near_label",
+      "category": "branch"
+    },
+    "bcc": {
+      "description": "Branch if unsigned lower / carry clear (C clear). Relative offset. Mnemonic aliases: blo, bcc.",
+      "syntax": "b<cond> const",
+      "example": "bz near_label",
+      "category": "branch"
+    },
+    "bcs": {
+      "description": "Branch if unsigned higher or same / carry set (C set). Relative offset. Mnemonic aliases: bhs, bcs.",
+      "syntax": "b<cond> const",
+      "example": "bz near_label",
+      "category": "branch"
+    },
+    "beq": {
+      "description": "Branch if equal / zero (Z set). Relative offset; assembler computes displacement. Mnemonic aliases: beq, bz.",
+      "syntax": "b<cond> const",
+      "example": "bz near_label",
+      "category": "branch"
+    },
+    "bfalse": {
+      "description": "Forms paired with unconditional branch; false branch behaves as no-op on CdM-8e. Mnemonic aliases: nop, bnanything, bntrue, bfalse.",
+      "syntax": "b<cond> const",
+      "example": "bz near_label",
+      "category": "branch"
+    },
+    "bge": {
+      "description": "Branch if signed greater or equal ((N∧V)∨(¬N∧¬V)). Relative offset. Mnemonic aliases: bge.",
+      "syntax": "b<cond> const",
+      "example": "bz near_label",
+      "category": "branch"
+    },
+    "bgt": {
+      "description": "Branch if signed greater ((¬Z∧N∧V)∨(¬Z∧¬N∧¬V)). Relative offset. Mnemonic aliases: bgt.",
+      "syntax": "b<cond> const",
+      "example": "bz near_label",
+      "category": "branch"
+    },
+    "bhi": {
+      "description": "Branch if unsigned higher (C∧¬Z). Relative offset. Mnemonic aliases: bhi.",
+      "syntax": "b<cond> const",
+      "example": "bz near_label",
+      "category": "branch"
+    },
+    "bhs": {
+      "description": "Branch if unsigned higher or same / carry set (C set). Relative offset. Mnemonic aliases: bhs, bcs.",
+      "syntax": "b<cond> const",
+      "example": "bz near_label",
+      "category": "branch"
+    },
+    "ble": {
+      "description": "Branch if signed less or equal ((Z∨N∧¬V)∨(¬N∧V)). Relative offset. Mnemonic aliases: ble.",
+      "syntax": "b<cond> const",
+      "example": "bz near_label",
+      "category": "branch"
+    },
+    "blo": {
+      "description": "Branch if unsigned lower / carry clear (C clear). Relative offset. Mnemonic aliases: blo, bcc.",
+      "syntax": "b<cond> const",
+      "example": "bz near_label",
+      "category": "branch"
+    },
+    "bls": {
+      "description": "Branch if unsigned lower or same (¬C ∨ Z). Relative offset. Mnemonic aliases: bls.",
+      "syntax": "b<cond> const",
+      "example": "bz near_label",
+      "category": "branch"
+    },
+    "blt": {
+      "description": "Branch if signed less than (N⊕V). Relative offset. Mnemonic aliases: blt.",
+      "syntax": "b<cond> const",
+      "example": "bz near_label",
+      "category": "branch"
+    },
+    "bmi": {
+      "description": "Branch if negative / minus (N set). Relative offset. Mnemonic aliases: bmi.",
+      "syntax": "b<cond> const",
+      "example": "bz near_label",
+      "category": "branch"
+    },
+    "bnanything": {
+      "description": "Forms paired with unconditional branch; false branch behaves as no-op on CdM-8e. Mnemonic aliases: nop, bnanything, bntrue, bfalse.",
+      "syntax": "b<cond> const",
+      "example": "bz near_label",
+      "category": "branch"
+    },
+    "bncc": {
+      "description": "Alias for opposite-condition branch encoding used by assembler control-flow lowering.",
+      "syntax": "b<cond> const",
+      "example": "bnne skip_zero",
+      "category": "branch"
+    },
+    "bncs": {
+      "description": "Alias for opposite-condition branch encoding used by assembler control-flow lowering.",
+      "syntax": "b<cond> const",
+      "example": "bnne skip_zero",
+      "category": "branch"
+    },
+    "bne": {
+      "description": "Branch if not equal / not zero (Z clear). Relative offset. Mnemonic aliases: bne, bnz, bneq.",
+      "syntax": "b<cond> const",
+      "example": "bz near_label",
+      "category": "branch"
+    },
+    "bneq": {
+      "description": "Alias for opposite-condition branch encoding used by assembler control-flow lowering.",
+      "syntax": "b<cond> const",
+      "example": "bnne skip_zero",
+      "category": "branch"
+    },
+    "bnfalse": {
+      "description": "Alias for opposite-condition branch encoding used by assembler control-flow lowering.",
+      "syntax": "b<cond> const",
+      "example": "bnne skip_zero",
+      "category": "branch"
+    },
+    "bnge": {
+      "description": "Alias for opposite-condition branch encoding used by assembler control-flow lowering.",
+      "syntax": "b<cond> const",
+      "example": "bnne skip_zero",
+      "category": "branch"
+    },
+    "bngt": {
+      "description": "Alias for opposite-condition branch encoding used by assembler control-flow lowering.",
+      "syntax": "b<cond> const",
+      "example": "bnne skip_zero",
+      "category": "branch"
+    },
+    "bnhi": {
+      "description": "Alias for opposite-condition branch encoding used by assembler control-flow lowering.",
+      "syntax": "b<cond> const",
+      "example": "bnne skip_zero",
+      "category": "branch"
+    },
+    "bnhs": {
+      "description": "Alias for opposite-condition branch encoding used by assembler control-flow lowering.",
+      "syntax": "b<cond> const",
+      "example": "bnne skip_zero",
+      "category": "branch"
+    },
+    "bnle": {
+      "description": "Alias for opposite-condition branch encoding used by assembler control-flow lowering.",
+      "syntax": "b<cond> const",
+      "example": "bnne skip_zero",
+      "category": "branch"
+    },
+    "bnlo": {
+      "description": "Alias for opposite-condition branch encoding used by assembler control-flow lowering.",
+      "syntax": "b<cond> const",
+      "example": "bnne skip_zero",
+      "category": "branch"
+    },
+    "bnls": {
+      "description": "Alias for opposite-condition branch encoding used by assembler control-flow lowering.",
+      "syntax": "b<cond> const",
+      "example": "bnne skip_zero",
+      "category": "branch"
+    },
+    "bnlt": {
+      "description": "Alias for opposite-condition branch encoding used by assembler control-flow lowering.",
+      "syntax": "b<cond> const",
+      "example": "bnne skip_zero",
+      "category": "branch"
+    },
+    "bnmi": {
+      "description": "Alias for opposite-condition branch encoding used by assembler control-flow lowering.",
+      "syntax": "b<cond> const",
+      "example": "bnne skip_zero",
+      "category": "branch"
+    },
+    "bnne": {
+      "description": "Alias for opposite-condition branch encoding used by assembler control-flow lowering.",
+      "syntax": "b<cond> const",
+      "example": "bnne skip_zero",
+      "category": "branch"
+    },
+    "bnnz": {
+      "description": "Alias for opposite-condition branch encoding used by assembler control-flow lowering.",
+      "syntax": "b<cond> const",
+      "example": "bnne skip_zero",
+      "category": "branch"
+    },
+    "bnpl": {
+      "description": "Alias for opposite-condition branch encoding used by assembler control-flow lowering.",
+      "syntax": "b<cond> const",
+      "example": "bnne skip_zero",
+      "category": "branch"
+    },
+    "bntrue": {
+      "description": "Forms paired with unconditional branch; false branch behaves as no-op on CdM-8e. Mnemonic aliases: nop, bnanything, bntrue, bfalse.",
+      "syntax": "b<cond> const",
+      "example": "bz near_label",
+      "category": "branch"
+    },
+    "bnvc": {
+      "description": "Alias for opposite-condition branch encoding used by assembler control-flow lowering.",
+      "syntax": "b<cond> const",
+      "example": "bnne skip_zero",
+      "category": "branch"
+    },
+    "bnvs": {
+      "description": "Alias for opposite-condition branch encoding used by assembler control-flow lowering.",
+      "syntax": "b<cond> const",
+      "example": "bnne skip_zero",
+      "category": "branch"
+    },
+    "bnz": {
+      "description": "Branch if not equal / not zero (Z clear). Relative offset. Mnemonic aliases: bne, bnz, bneq.",
+      "syntax": "b<cond> const",
+      "example": "bz near_label",
+      "category": "branch"
+    },
+    "bpl": {
+      "description": "Branch if plus / non-negative (N clear). Relative offset. Mnemonic aliases: bpl.",
+      "syntax": "b<cond> const",
+      "example": "bz near_label",
+      "category": "branch"
+    },
+    "br": {
+      "description": "Unconditional relative branch (always). Alias nop/branches listed share opcode space. Mnemonic aliases: br, banything, btrue.",
+      "syntax": "b<cond> const",
+      "example": "bz near_label",
+      "category": "branch"
+    },
+    "break": {
+      "description": "Exit the innermost while/until loop.",
+      "syntax": "break",
+      "example": "break",
+      "category": "assembler"
+    },
+    "btrue": {
+      "description": "Unconditional relative branch (always). Alias nop/branches listed share opcode space. Mnemonic aliases: br, banything, btrue.",
+      "syntax": "b<cond> const",
+      "example": "bz near_label",
+      "category": "branch"
+    },
+    "bvc": {
+      "description": "Branch if overflow clear (V clear). Relative offset. Mnemonic aliases: bvc.",
+      "syntax": "b<cond> const",
+      "example": "bz near_label",
+      "category": "branch"
+    },
+    "bvs": {
+      "description": "Branch if overflow set (V set). Relative offset. Mnemonic aliases: bvs.",
+      "syntax": "b<cond> const",
+      "example": "bz near_label",
+      "category": "branch"
+    },
+    "bz": {
+      "description": "Branch if equal / zero (Z set). Relative offset; assembler computes displacement. Mnemonic aliases: beq, bz.",
+      "syntax": "b<cond> const",
+      "example": "bz near_label",
+      "category": "branch"
+    },
+    "clr": {
+      "description": "Standard macro: clear register (sub rn,rn).",
+      "syntax": "clr rn",
+      "example": "clr r2",
+      "category": "macro"
+    },
+    "cmp": {
+      "description": "Compare rn with rm by computing (rn − rm); registers unchanged; C,V,Z,N updated.",
+      "syntax": "cmp rn, rm",
+      "example": "cmp r1, r2",
+      "category": "arithmetic"
+    },
+    "continue": {
+      "description": "Jump to next iteration of the innermost while/until loop.",
+      "syntax": "continue",
+      "example": "continue",
+      "category": "assembler"
+    },
+    "crc": {
+      "description": "Exchange PC with value at top of stack (coroutine / continuation helper).",
+      "syntax": "crc",
+      "example": "crc",
+      "category": "control"
+    },
+    "dc": {
+      "description": "Define constant(s): emit bytes from expressions or string literals.",
+      "syntax": "dc expr [, expr ...]",
+      "example": "dc \"Hello\", 0",
+      "category": "directive"
+    },
+    "dec": {
+      "description": "Decrement rn as binary number (wraps). C,V,Z,N updated.",
+      "syntax": "dec rn",
+      "example": "dec r2",
+      "category": "arithmetic"
+    },
+    "define": {
+      "description": "Standard macro: define label at absolute section base (*define/2 in library).",
+      "syntax": "define name, addr_expr",
+      "example": "define mydata, 0x0100",
+      "category": "macro"
+    },
+    "di": {
+      "description": "Standard macro: disable interrupts (clears PS via interrupt-vector trick).",
+      "syntax": "di",
+      "example": "di",
+      "category": "macro"
+    },
+    "do": {
+      "description": "Start of do/until loop body.",
+      "syntax": "do\n    …\nuntil cond",
+      "example": "do\n    inc r0\nuntil z",
+      "category": "assembler"
+    },
+    "ds": {
+      "description": "Reserve size bytes initialized to zero; size must be a numeric constant.",
+      "syntax": "ds const",
+      "example": "ds 16",
+      "category": "directive"
+    },
+    "ei": {
+      "description": "Standard macro: enable interrupts (sets I bit in PS via interrupt-vector trick).",
+      "syntax": "ei",
+      "example": "ei",
+      "category": "macro"
+    },
+    "else": {
+      "description": "Optional alternative branch in an if-block.",
+      "syntax": "else\n    …",
+      "example": "else\n    ldi r0, 2",
+      "category": "assembler"
+    },
+    "end": {
+      "description": "Marks the end of the source file (translation unit). Required for a complete program the parser accepts.",
+      "syntax": "end",
+      "example": "end",
+      "category": "assembler"
+    },
+    "ext": {
+      "description": "Mark label(s) as external (shared across files) in standalone label lines.",
+      "syntax": "label: ext",
+      "example": "foo: ext",
+      "category": "assembler"
+    },
+    "fi": {
+      "description": "End of an if-block.",
+      "syntax": "fi",
+      "example": "fi",
+      "category": "assembler"
+    },
+    "goto": {
+      "description": "Structured long branch: goto condition, target — assembler emits short branch or branch+jmp.",
+      "syntax": "goto branch_mnemonic, const",
+      "example": "goto z, near_code",
+      "category": "assembler"
+    },
+    "halt": {
+      "description": "Stop the clock; PC not updated — restarting re-executes halt.",
+      "syntax": "halt",
+      "example": "halt",
+      "category": "clock"
+    },
+    "high": {
+      "description": "Byte specifier: high byte of a 16-bit address expression (inside high(expr)).",
+      "syntax": "high(addr_expr)",
+      "example": "ldi r1, high(far_code)",
+      "category": "expression"
+    },
+    "if": {
+      "description": "Start a conditional block; paired with fi (and optional else).",
+      "syntax": "if … fi",
+      "example": "if\n    cmp r0, r1\nis eq\n    …\nfi",
+      "category": "assembler"
+    },
+    "inc": {
+      "description": "Increment rn as binary number (wraps). C,V,Z,N updated.",
+      "syntax": "inc rn",
+      "example": "inc r2",
+      "category": "arithmetic"
+    },
+    "ioi": {
+      "description": "Hardware/software interrupt entry: push PC and PS, load PC/PS from vector.",
+      "syntax": "ioi",
+      "example": "ioi",
+      "category": "control"
+    },
+    "is": {
+      "description": "Separates condition code from the branch mnemonic in if/while condition lines.",
+      "syntax": "… is branch_mnemonic",
+      "example": "is hs",
+      "category": "assembler"
+    },
+    "jmp": {
+      "description": "Unconditional absolute jump: const → PC (16-bit). Flags unchanged.",
+      "syntax": "jmp const",
+      "example": "jmp far_code",
+      "category": "control"
+    },
+    "jsr": {
+      "description": "Jump subroutine: push return PC (little-endian), then const → PC. Flags unchanged.",
+      "syntax": "jsr const",
+      "example": "jsr print",
+      "category": "control"
+    },
+    "ld": {
+      "description": "Load a byte into rm from the data memory cell addressed by rn (*rn → rm). Flags unchanged.",
+      "syntax": "ld rn, rm",
+      "example": "ld r0, r3",
+      "category": "memory"
+    },
+    "ldc": {
+      "description": "Load a byte into rm from the code memory cell addressed by rn (*rn → rm). Flags unchanged.",
+      "syntax": "ldc rn, rm",
+      "example": "ldc r2, r1",
+      "category": "memory"
+    },
+    "ldi": {
+      "description": "Load the immediate single-byte data item const into rn. Flags unchanged.",
+      "syntax": "ldi rn, const",
+      "example": "ldi r1, 0x6E",
+      "category": "memory"
+    },
+    "ldsa": {
+      "description": "Load (SP + const) into rn. Often used with tplates for locals. Flags unchanged.",
+      "syntax": "ldsa rn, const",
+      "example": "ldsa r0, low(first_op)",
+      "category": "stack"
+    },
+    "ldv": {
+      "description": "Standard macro: load byte from absolute address const into rn.",
+      "syntax": "ldv const, rn",
+      "example": "ldv 0x0200, r1",
+      "category": "macro"
+    },
+    "low": {
+      "description": "Byte specifier: low byte of a 16-bit address expression (inside low(expr)).",
+      "syntax": "low(addr_expr)",
+      "example": "ldi r0, low(calculating)",
+      "category": "expression"
+    },
+    "macro": {
+      "description": "Begin a macro definition: macro name/arity … mend.",
+      "syntax": "macro name / arity",
+      "example": "macro swap / 2",
+      "category": "assembler"
+    },
+    "mend": {
+      "description": "End of a macro definition.",
+      "syntax": "mend",
+      "example": "mend",
+      "category": "assembler"
+    },
+    "move": {
+      "description": "Copy rm into rn; C,V cleared; Z,N reflect result.",
+      "syntax": "move rn, rm",
+      "example": "move r0, r1",
+      "category": "arithmetic"
+    },
+    "neg": {
+      "description": "Replace rn with its 8-bit two's complement. C,V,Z,N updated.",
+      "syntax": "neg rn",
+      "example": "neg r0",
+      "category": "arithmetic"
+    },
+    "nop": {
+      "description": "Forms paired with unconditional branch; false branch behaves as no-op on CdM-8e. Mnemonic aliases: nop, bnanything, bntrue, bfalse.",
+      "syntax": "b<cond> const",
+      "example": "bz near_label",
+      "category": "branch"
+    },
+    "not": {
+      "description": "Flip all bits in rn. Z,N reflect result; C,V cleared.",
+      "syntax": "not rn",
+      "example": "not r0",
+      "category": "arithmetic"
+    },
+    "or": {
+      "description": "Bitwise OR rn with rm into rm. Z,N reflect result; C,V cleared.",
+      "syntax": "or rn, rm",
+      "example": "or r0, r1",
+      "category": "arithmetic"
+    },
+    "osix": {
+      "description": "Extended opcode / OS trap style instruction (opcode 0xDB); operand is a constant expression.",
+      "syntax": "osix const",
+      "example": "osix 1",
+      "category": "control"
+    },
+    "pop": {
+      "description": "Pop a byte off the stack into rn: load from *SP, then increment SP. Flags unchanged.",
+      "syntax": "pop rn",
+      "example": "pop r3",
+      "category": "stack"
+    },
+    "popall": {
+      "description": "Pop r0..r3 from stack and increment SP by 4. Flags unchanged.",
+      "syntax": "popall",
+      "example": "popall",
+      "category": "stack"
+    },
+    "push": {
+      "description": "Push the byte in rn onto the stack: decrement SP, then store rn at *SP. Flags unchanged.",
+      "syntax": "push rn",
+      "example": "push r2",
+      "category": "stack"
+    },
+    "pushall": {
+      "description": "Push r3,r2,r1,r0 onto stack and decrement SP by 4. Flags unchanged.",
+      "syntax": "pushall",
+      "example": "pushall",
+      "category": "stack"
+    },
+    "rannum": {
+      "description": "Standard macro: pseudo random helper (see standard.mlb).",
+      "syntax": "rannum\nrannum seed",
+      "example": "rannum",
+      "category": "macro"
+    },
+    "restore": {
+      "description": "Macro/pseudo-op: pop register saved by save (optional explicit register).",
+      "syntax": "restore\nrestore rn",
+      "example": "restore\nrestore r2",
+      "category": "assembler"
+    },
+    "rol": {
+      "description": "Rotate left one bit; b7→b0 and into C; V cleared.",
+      "syntax": "rol rn",
+      "example": "rol r2",
+      "category": "arithmetic"
+    },
+    "rsect": {
+      "description": "Start a relocatable section named for the linker (named chunk of code/data).",
+      "syntax": "rsect name",
+      "example": "rsect mycode",
+      "category": "assembler"
+    },
+    "rti": {
+      "description": "Return from interrupt: restore PC and PS from stack.",
+      "syntax": "rti",
+      "example": "rti",
+      "category": "control"
+    },
+    "rts": {
+      "description": "Return from subroutine: pop PC from stack; increment SP.",
+      "syntax": "rts",
+      "example": "rts",
+      "category": "control"
+    },
+    "save": {
+      "description": "Macro/pseudo-op: push register on internal stack for paired restore blocks.",
+      "syntax": "save rn",
+      "example": "save r2",
+      "category": "assembler"
+    },
+    "setsp": {
+      "description": "Set SP to const. Flags unchanged.",
+      "syntax": "setsp const",
+      "example": "setsp 0xFF",
+      "category": "stack"
+    },
+    "shl": {
+      "description": "Standard macro: shift left one bit via addc rn,rn.",
+      "syntax": "shl rn",
+      "example": "shl r0",
+      "category": "macro"
+    },
+    "shla": {
+      "description": "Arithmetic shift left (multiply by 2); bit 7→C; V if sign changes.",
+      "syntax": "shla rn",
+      "example": "shla r0",
+      "category": "arithmetic"
+    },
+    "shr": {
+      "description": "Logical shift right; old C into bit 7; bit 0→C.",
+      "syntax": "shr rn",
+      "example": "shr r1",
+      "category": "arithmetic"
+    },
+    "shra": {
+      "description": "Arithmetic shift right (divide by 2 in two's complement); bit 0→C. Z,N,C updated; V=0.",
+      "syntax": "shra rn",
+      "example": "shra r1",
+      "category": "arithmetic"
+    },
+    "st": {
+      "description": "Store the byte in rm to the data memory cell addressed by rn (rm → *rn). Flags unchanged.",
+      "syntax": "st rn, rm",
+      "example": "st r1, r0",
+      "category": "memory"
+    },
+    "stays": {
+      "description": "Keyword introducing the loop condition branch in while.",
+      "syntax": "stays branch_mnemonic",
+      "example": "stays nz",
+      "category": "assembler"
+    },
+    "stv": {
+      "description": "Standard macro: store rn to absolute address const.",
+      "syntax": "stv rn, const",
+      "example": "stv r0, 0x0200",
+      "category": "macro"
+    },
+    "sub": {
+      "description": "Subtract rm from rn into rm (rn − rm → rm). C,V,Z,N updated.",
+      "syntax": "sub rn, rm",
+      "example": "sub r2, r3",
+      "category": "arithmetic"
+    },
+    "then": {
+      "description": "Optional keyword after conditions in an if-block.",
+      "syntax": "… is cond\nthen",
+      "example": "is hs\nthen",
+      "category": "assembler"
+    },
+    "tplate": {
+      "description": "Declare a template section (reusable pattern with fields referenced as name.field).",
+      "syntax": "tplate name",
+      "example": "tplate vec",
+      "category": "assembler"
+    },
+    "tst": {
+      "description": "Standard macro: test register — sets Z,N via cmp-like behaviour without changing registers.",
+      "syntax": "tst rn",
+      "example": "tst r1",
+      "category": "macro"
+    },
+    "until": {
+      "description": "End of do/until loop: branch back if condition holds.",
+      "syntax": "until branch_mnemonic",
+      "example": "until nz",
+      "category": "assembler"
+    },
+    "wait": {
+      "description": "Suspend clock until interrupt; PC updated only when ISR starts from hardware interrupt.",
+      "syntax": "wait",
+      "example": "wait",
+      "category": "clock"
+    },
+    "wend": {
+      "description": "End of a while loop.",
+      "syntax": "wend",
+      "example": "wend",
+      "category": "assembler"
+    },
+    "while": {
+      "description": "Start a while loop; condition ends with stays and a branch mnemonic; closed by wend.",
+      "syntax": "while … stays cond\n    …\nwend",
+      "example": "while\n    tst r0\nstays z\n    dec r0\nwend",
+      "category": "assembler"
+    },
+    "xor": {
+      "description": "Bitwise XOR rn with rm into rm. Z,N reflect result; C,V cleared.",
+      "syntax": "xor rn, rm",
+      "example": "xor r0, r1",
+      "category": "arithmetic"
+    }
+  }
+}
