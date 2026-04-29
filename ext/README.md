@@ -1,49 +1,107 @@
 [English](./README.md) | [Русский](./README.ru.md)
 
-# CDM16 LSP: Syntax Highlighting
+# CDM LSP (VS Code)
 
-VSCode extension for CdM assembly syntax highlighting powered by a Python LSP server (`pygls`).
+VS Code extension for **CdM family assembly** (`.asm`, `.mlb`) with a Python language server (`pygls`). The server uses **`cocas`** (via the **`cdm-devkit`** package in `requirements.txt`): ANTLR grammars and targets `cdm8`, `cdm8e`, `cdm16`, `cdm16e`.
 
-Current focus is `cdm8` highlighting via **Semantic Tokens**.
+## Features
 
-## What This Extension Highlights
+| Feature | Description |
+|--------|-------------|
+| **Semantic highlighting** | Entity-based colors via `textDocument/semanticTokens/full` (keywords, macros, directives, mnemonics, registers, numbers, strings, labels, comments). |
+| **Hover** | Markdown help from `server/data/<dialect>_mnemonics.json` (fully populated for **`cdm8e`**; stubs for `cdm8`, `cdm16`, `cdm16e`). |
+| **Completion** | Prefix completion for grammar keywords, target mnemonics/directives, standard-library macro names, and JSON keys when present. |
+| **Diagnostics** | On **save** of `*.asm`, runs **`cocas` assembler** for the current `cdm.dialect`; first error is published as a **red squiggle** on the reported line (whole-line span; see implementation notes). |
 
-The server classifies and returns semantic tokens for:
+Dialect for all of the above is **`cdm.dialect`** (`cdm8` \| `cdm8e` \| `cdm16` \| `cdm16e`).
 
-- `comment` — line comments (`# ...`)
-- `keyword` — assembler keywords/directives control words (`asect`, `if`, `end`, ...)
-- `macro` — macro definitions and macro calls
-- `type` — labels and label references
+## Semantic token types
+
+The server maps the grammar + target metadata to these token types (theme rules use these names):
+
+- `comment` — `# ...` (scanned in raw text; lexer skips comments)
+- `keyword` — `asect`, `if`, `end`, `is`, `else`, …
+- `macro` — standard macros from `standard.mlb`, local macro definitions/calls where detected, `save` / `restore` on 8-bit targets
+- `type` — labels (declarations and references in expressions)
 - `function` — instruction mnemonics
-- `parameter` — registers (`r0`, `r1`, ...)
-- `number` — numeric literals (`0x..`, `0b..`, decimal)
-- `string` — string/char literals
+- `parameter` — registers
+- `number` — numeric literals
+- `string` — string / character literals
 
-## How Highlighting Works
+Implementation: `server/src/semantic_tokens.py`.
 
-1. VSCode opens a source file handled by the extension.
-2. The extension starts Python LSP server (`server/src/server.py`).
-3. On `textDocument/semanticTokens/full`, the server tokenizes text using `cocas` lexer:
-   - `cocas.assembler.generated.AsmLexer`
-4. The server maps lexer tokens + target metadata to semantic token types:
-   - macros from `standard.mlb`
-   - directives from target `assembly_directives()`
-   - instructions from target handlers
-5. VSCode theme maps semantic token types to colors.
+## Hover reference JSON
 
-Implementation file: `server/src/semantic_tokens.py`
+Editable source of truth per dialect:
 
-## Dialect
+- `server/data/cdm8e_mnemonics.json` — full set of entries (`description`, `syntax`, `example`, optional `category`)
+- `server/data/cdm8_mnemonics.json`, `cdm16_mnemonics.json`, `cdm16e_mnemonics.json` — placeholders for future content
 
-Dialect is controlled by VSCode setting:
+The server reloads JSON when the file changes (mtime). Implementation: `server/src/hover_help.py`.
 
-- `cdm.dialect`: `cdm8 | cdm8e | cdm16 | cdm16e`
+## Assembler diagnostics (errors on save)
 
-At the moment, highlighting behavior is tuned primarily for `cdm8`.
+After save, the server calls `cocas.assembler.assemble_files` on the **file on disk** for the active dialect. If assembly raises `AssemblerException`, a diagnostic is sent for the **document URI** at the reported **1-based line** (converted to LSP 0-based), spanning the full line. If the error refers to another path (e.g. macro library), the message is shown at the start of the current file and includes `location: path:line`.
 
-## User Color Customization
+Implementation: `server/src/assemble_diagnostics.py`.
 
-Users can override colors in **User Settings (JSON)**:
+## Project layout
+
+```
+ext/
+  client/                 # TypeScript VS Code extension (launches the server)
+  server/
+    src/
+      server.py           # LSP entry: initialize, didSave, semantic tokens, hover, completion, diagnostics
+      semantic_tokens.py
+      hover_help.py
+      asm_completion.py
+      assemble_diagnostics.py
+      ast_utils.py        # optional AST logging (dev)
+      cst_utils.py
+    data/
+      *_mnemonics.json   # hover (and completion key hints for filled JSONs)
+  requirements.txt
+```
+
+## Development
+
+### Python (server + cocas)
+
+From `ext/`:
+
+```bash
+python3 -m venv venv
+./venv/bin/pip install -r requirements.txt
+```
+
+`requirements.txt` installs **`cdm-devkit`** (includes **`cocas`** and assembler dependencies).
+
+### Client (TypeScript)
+
+From `ext/client/`:
+
+```bash
+npm install
+npm run compile
+```
+
+### Run in Extension Host
+
+- Open `ext/` in VS Code / Cursor
+- **Run and Debug** → launch **Extension** (F5)
+
+## Settings (`client/package.json`)
+
+| Setting | Purpose |
+|--------|---------|
+| `cdm.dialect` | `cdm8` \| `cdm8e` \| `cdm16` \| `cdm16e` — target for highlighting, hover keys, completion, diagnostics |
+| `cdm.pythonPath` | Optional path to Python; otherwise the Python extension’s interpreter |
+| `cdm.autoInstall` | If `true`, create/update a private venv and `pip install -r requirements.txt` under global storage |
+
+## User color customization
+
+Override semantic token colors in **User Settings (JSON)**:
 
 ```json
 {
@@ -63,50 +121,10 @@ Users can override colors in **User Settings (JSON)**:
 }
 ```
 
-Theme-specific overrides are also supported via:
-
-- `[Default Dark+]`
-- `[Default Light+]`
-- `[Default High Contrast]`
-- `[Default High Contrast Light]`
-
-inside `editor.semanticTokenColorCustomizations`.
-
-## Development
-
-### 1) Python dependencies
-
-From `ext/`:
-
-```bash
-python3 -m venv venv
-./venv/bin/pip install -r requirements.txt
-```
-
-### 2) Client dependencies
-
-From `ext/client/`:
-
-```bash
-npm install
-npm run compile
-```
-
-### 3) Run extension in Extension Host
-
-- Open `ext/` in VSCode
-- Run `Build & Run Extension` (F5)
-
-## Settings
-
-Extension settings in `client/package.json`:
-
-- `cdm.dialect` — target dialect for server features
-- `cdm.pythonPath` — explicit Python interpreter path (optional)
-- `cdm.autoInstall` — auto-create private venv and install deps (default: `true`)
+Theme-scoped overrides work via `[Default Dark+]`, `[Default Light+]`, etc.
 
 ## Notes
 
-- Semantic highlighting requires VSCode semantic tokens support (enabled by default in modern VSCode).
-- Final colors always depend on active theme + user overrides.
-- If highlighting looks stale after changes, run `Developer: Reload Window`.
+- Semantic highlighting needs client support for semantic tokens (on by default in current VS Code / Cursor).
+- Diagnostics run on **save** and use the **saved** file contents.
+- After changing `cdm.dialect` or server code, use **Developer: Reload Window** if the UI looks stale.

@@ -5,6 +5,8 @@ from urllib.parse import urlparse, unquote
 from pygls.lsp.server import LanguageServer
 from lsprotocol import types
 
+from assemble_diagnostics import build_assemble_diagnostics
+from asm_completion import completion_list
 from ast_utils import ast_file_to_string
 from cst_utils import cst_file_to_string
 from hover_help import hover_for_word, word_at_cursor
@@ -25,14 +27,31 @@ def on_initialize(params: types.InitializeParams):
 
 @server.feature(types.TEXT_DOCUMENT_DID_SAVE)
 def did_save(params: types.DidSaveTextDocumentParams):
-    try:
-        # Build CST from the saved file on disk (not editor buffer).
-        uri = params.text_document.uri
-        parsed = urlparse(uri)
-        if parsed.scheme != "file":
-            raise ValueError(f"Unsupported URI scheme for didSave: {parsed.scheme}")
+    uri = params.text_document.uri
+    parsed = urlparse(uri)
+    if parsed.scheme != "file":
+        logging.warning("didSave: unsupported URI scheme %s", parsed.scheme)
+        return
 
-        file_path = Path(unquote(parsed.path))
+    file_path = Path(unquote(parsed.path))
+    doc = server.workspace.get_text_document(uri)
+
+    # Assembler diagnostics (cocas): one failing error ends the build — show that line/range.
+    if file_path.suffix.lower() == ".asm":
+        diags = build_assemble_diagnostics(file_path, doc, _dialect)
+        try:
+            server.protocol.notify(
+                types.TEXT_DOCUMENT_PUBLISH_DIAGNOSTICS,
+                types.PublishDiagnosticsParams(
+                    uri=uri,
+                    diagnostics=diags,
+                    version=doc.version,
+                ),
+            )
+        except Exception:
+            logging.exception("Failed to publish diagnostics for %s", uri)
+
+    try:
         cst = cst_file_to_string(file_path)
         logging.info("CST for %s\n%s", file_path.as_posix(), cst)
 
@@ -61,8 +80,6 @@ def semantic_tokens_full_handler(params: types.SemanticTokensParams) -> types.Se
 
 @server.feature(types.TEXT_DOCUMENT_HOVER, types.HoverOptions())
 def hover(params: types.HoverParams):
-    if _dialect != "cdm8e":
-        return None
     doc = server.workspace.get_text_document(params.text_document.uri)
     try:
         line = doc.lines[params.position.line]
@@ -76,18 +93,20 @@ def hover(params: types.HoverParams):
 
 @server.feature(
     types.TEXT_DOCUMENT_COMPLETION,
-    types.CompletionOptions(trigger_characters=[" "]),
+    types.CompletionOptions(resolve_provider=False),
 )
 def completions(params: types.CompletionParams):
     document = server.workspace.get_text_document(params.text_document.uri)
-    current_line = document.lines[params.position.line].strip()
-
-    if not current_line.endswith("hello."):
-        return []
-
-    return [
-        types.CompletionItem(label="world"),
-    ]
+    try:
+        line_text = document.lines[params.position.line]
+    except IndexError:
+        return types.CompletionList(is_incomplete=False, items=[])
+    return completion_list(
+        line_text=line_text,
+        line=params.position.line,
+        character=params.position.character,
+        dialect=_dialect,
+    )
 
 
 if __name__ == "__main__":

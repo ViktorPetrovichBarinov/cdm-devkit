@@ -7,27 +7,42 @@ from typing import Any, Optional
 
 from lsprotocol import types
 
-_DATA_PATH = Path(__file__).resolve().parent.parent / "data" / "cdm8e_mnemonics.json"
+_DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 
-_cdm8e_cache_mtime: float | None = None
-_cdm8e_cache_table: dict[str, Any] = {}
+# One JSON per dialect (editable source of truth under server/data/).
+_HOVER_JSON_BY_DIALECT: dict[str, str] = {
+    "cdm8": "cdm8_mnemonics.json",
+    "cdm8e": "cdm8e_mnemonics.json",
+    "cdm16": "cdm16_mnemonics.json",
+    "cdm16e": "cdm16e_mnemonics.json",
+}
+
+# path key -> (mtime, mnemonics dict)
+_mnemonics_cache: dict[str, tuple[float, dict[str, Any]]] = {}
 
 
-def _load_cdm8e() -> dict[str, Any]:
-    """
-    Load hover dictionary from server/data/cdm8e_mnemonics.json (single editable source).
-    Reloads when the file changes on disk (mtime).
-    """
-    global _cdm8e_cache_mtime, _cdm8e_cache_table
-    if not _DATA_PATH.is_file():
+def _hover_json_path(dialect: str) -> Optional[Path]:
+    name = _HOVER_JSON_BY_DIALECT.get(dialect)
+    if not name:
+        return None
+    p = _DATA_DIR / name
+    return p if p.is_file() else None
+
+
+def _load_mnemonics(dialect: str) -> dict[str, Any]:
+    """Load mnemonics for dialect; reload when the backing JSON mtime changes."""
+    path = _hover_json_path(dialect)
+    if path is None:
         return {}
-    mtime = _DATA_PATH.stat().st_mtime
-    if _cdm8e_cache_mtime == mtime:
-        return _cdm8e_cache_table
-    data = json.loads(_DATA_PATH.read_text(encoding="utf-8"))
-    _cdm8e_cache_table = data.get("mnemonics") or {}
-    _cdm8e_cache_mtime = mtime
-    return _cdm8e_cache_table
+    key = str(path.resolve())
+    mtime = path.stat().st_mtime
+    hit = _mnemonics_cache.get(key)
+    if hit is not None and hit[0] == mtime:
+        return hit[1]
+    data = json.loads(path.read_text(encoding="utf-8"))
+    table = data.get("mnemonics") or {}
+    _mnemonics_cache[key] = (mtime, table)
+    return table
 
 
 def word_at_cursor(line: str, character: int) -> Optional[str]:
@@ -35,7 +50,6 @@ def word_at_cursor(line: str, character: int) -> Optional[str]:
     if not line:
         return None
     col = max(0, min(character, len(line)))
-    # If cursor on delimiter, scan left to word end
     idx = col
     if idx >= len(line):
         idx = len(line) - 1
@@ -46,7 +60,6 @@ def word_at_cursor(line: str, character: int) -> Optional[str]:
         return ch.isalnum() or ch == "_" or ch == "."
 
     if not is_word_ch(line[idx]):
-        # try immediate left (VS Code often places cursor after token)
         if idx > 0 and is_word_ch(line[idx - 1]):
             idx -= 1
         else:
@@ -61,7 +74,6 @@ def word_at_cursor(line: str, character: int) -> Optional[str]:
     w = line[start:end].strip()
     if not w:
         return None
-    # Strip trailing punctuation sometimes glued (e.g. "halt.")
     w = re.sub(r"[^a-zA-Z0-9_.]+$", "", w)
     return w or None
 
@@ -85,12 +97,8 @@ def build_hover_markdown(entry: dict, mnemonic: str) -> str:
 
 
 def hover_for_word(word: str, *, dialect: str) -> Optional[types.Hover]:
-    if dialect != "cdm8e":
-        return None
     key = word.lower()
-    # Strip leading b for branch? No — mnemonics stored as bz, beq, etc.
-
-    table = _load_cdm8e()
+    table = _load_mnemonics(dialect)
     entry = table.get(key)
     if not entry:
         return None
