@@ -9,6 +9,7 @@ from assemble_diagnostics import build_assemble_diagnostics
 from asm_completion import completion_list
 from ast_utils import ast_file_to_string
 from cst_utils import cst_file_to_string
+from document_highlights import document_highlights as build_document_highlights
 from hover_help import hover_for_word, word_at_cursor
 from semantic_tokens import legend as semantic_legend, semantic_tokens_full
 
@@ -76,6 +77,25 @@ def did_save(params: types.DidSaveTextDocumentParams):
 def semantic_tokens_full_handler(params: types.SemanticTokensParams) -> types.SemanticTokens:
     doc = server.workspace.get_text_document(params.text_document.uri)
     return semantic_tokens_full(doc.source, uri=params.text_document.uri, target=_dialect)
+
+
+@server.feature(
+    types.TEXT_DOCUMENT_DOCUMENT_HIGHLIGHT,
+    types.DocumentHighlightRegistrationOptions(
+        document_selector=[
+            {"scheme": "file", "pattern": "**/*.asm"},
+            {"scheme": "file", "pattern": "**/*.mlb"},
+        ],
+    ),
+)
+def document_highlight(params: types.DocumentHighlightParams):
+    doc = server.workspace.get_text_document(params.text_document.uri)
+    lines = list(doc.lines)
+    return build_document_highlights(
+        lines,
+        line=params.position.line,
+        character=params.position.character,
+    )
 
 
 @server.feature(types.TEXT_DOCUMENT_HOVER, types.HoverOptions())
