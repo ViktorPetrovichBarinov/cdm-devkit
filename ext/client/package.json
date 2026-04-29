@@ -1,7 +1,7 @@
 {
-    "name": "cdm16-lsp",
-    "displayName": "CDM16 LSP",
-    "description": "lsp extension for cdm-16 assembly",
+    "name": "cdm-lsp",
+    "displayName": "CDM LSP",
+    "description": "Language Server for CdM family assembly (.asm, .mlb).",
     "author": "Ruslan Chudinov",
     "repository": {
         "type": "git",

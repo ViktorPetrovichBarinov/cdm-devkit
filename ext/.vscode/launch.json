@@ -23,7 +23,7 @@
         "--disable-extension",
         "streetsidesoftware.code-spell-checker"
       ],
-      "preLaunchTask": "Compile CDM16 Extension",
+      "preLaunchTask": "Compile CDM Extension",
       "outFiles": ["${workspaceFolder}/client/out/**/*.js"]
     }
   ]

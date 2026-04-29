@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "Build CDM16 Extension",
+      "label": "Build CDM Extension",
       "type": "shell",
       "command": "npm",
       "args": ["install"],
@@ -16,7 +16,7 @@
       "problemMatcher": []
     },
     {
-      "label": "Compile CDM16 Extension",
+      "label": "Compile CDM Extension",
       "type": "shell",
       "command": "npm",
       "args": ["run", "compile"],
@@ -27,7 +27,7 @@
         "kind": "build",
         "isDefault": true
       },
-      "dependsOn": ["Build CDM16 Extension"],
+      "dependsOn": ["Build CDM Extension"],
       "problemMatcher": []
     }
   ]

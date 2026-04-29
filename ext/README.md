@@ -127,4 +127,4 @@ Theme-scoped overrides work via `[Default Dark+]`, `[Default Light+]`, etc.
 
 - Semantic highlighting needs client support for semantic tokens (on by default in current VS Code / Cursor).
 - Diagnostics run on **save** and use the **saved** file contents.
-- After changing `cdm.dialect` or server code, use **Developer: Reload Window** if the UI looks stale.
+- Changing **`cdm.dialect`** is picked up via `workspace/didChangeConfiguration` (no reload). After **server or extension code** changes, use **Developer: Reload Window** if the UI looks stale.

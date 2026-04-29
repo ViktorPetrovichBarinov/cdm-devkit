@@ -2,6 +2,7 @@ import logging
 from pathlib import Path
 from urllib.parse import urlparse, unquote
 
+from cocas.assembler import list_assembler_targets
 from pygls.lsp.server import LanguageServer
 from lsprotocol import types
 
@@ -18,13 +19,52 @@ server = LanguageServer("CDM-server", "v0.1")
 _dialect: str = "cdm16"
 
 
+def _normalize_dialect(raw: str | None) -> str | None:
+    if raw is None:
+        return None
+    d = str(raw).strip()
+    if not d:
+        return None
+    if d not in list_assembler_targets():
+        logging.warning(
+            "Unknown dialect %r (valid: %s)",
+            d,
+            ", ".join(sorted(list_assembler_targets())),
+        )
+        return None
+    return d
+
+
+def _set_dialect_from_raw(raw: str | None) -> None:
+    global _dialect
+    d = _normalize_dialect(raw)
+    if d is not None:
+        _dialect = d
+
+
 @server.feature(types.INITIALIZE)
 def on_initialize(params: types.InitializeParams):
-    global _dialect
     opts = params.initialization_options or {}
     if isinstance(opts, dict) and opts.get("dialect"):
-        _dialect = str(opts["dialect"])
+        _set_dialect_from_raw(str(opts["dialect"]))
     logging.info("Initialized with dialect=%s", _dialect)
+
+
+@server.feature(types.WORKSPACE_DID_CHANGE_CONFIGURATION)
+def did_change_configuration(params: types.DidChangeConfigurationParams):
+    """
+    VS Code language client sends this when `cdm.*` settings change
+    (see client synchronize.configurationSection).
+    """
+    settings = params.settings
+    if settings is None:
+        return
+    if not isinstance(settings, dict):
+        return
+    cdm = settings.get("cdm")
+    if isinstance(cdm, dict) and cdm.get("dialect") is not None:
+        _set_dialect_from_raw(str(cdm["dialect"]))
+        logging.info("Dialect from configuration: %s", _dialect)
 
 
 @server.feature(types.TEXT_DOCUMENT_DID_SAVE)

@@ -115,7 +115,7 @@ async function ensurePythonEnvironment(
         await vscode.window.withProgress(
             {
                 location: vscode.ProgressLocation.Notification,
-                title: "CDM16 LSP: preparing Python environment",
+                title: "CDM: preparing Python environment",
                 cancellable: false,
             },
             async () => {
@@ -137,7 +137,7 @@ async function ensurePythonEnvironment(
 }
 
 export async function activate(context: vscode.ExtensionContext) {
-    extensionOutputChannel = vscode.window.createOutputChannel("CDM16 Extension");
+    extensionOutputChannel = vscode.window.createOutputChannel("CDM Extension");
     extensionOutputChannel.show(true);
     extensionOutputChannel.appendLine("Output channel working well!");
 
@@ -172,7 +172,10 @@ export async function activate(context: vscode.ExtensionContext) {
             { scheme: "file", pattern: "**/*.asm" },
             { scheme: "file", pattern: "**/*.mlb" },
         ],
-        outputChannel: vscode.window.createOutputChannel("CDM16 LSP"),
+        outputChannel: vscode.window.createOutputChannel("CDM LSP"),
+        synchronize: {
+            configurationSection: "cdm",
+        },
         initializationOptions: {
             dialect: dialect
         }
@@ -180,8 +183,8 @@ export async function activate(context: vscode.ExtensionContext) {
 
     // Create and launch client
     client = new LanguageClient(
-        "cdm16-lsp",                    // client-id
-        "CDM16 Language Server",        // log's name
+        "cdm-lsp",
+        "CDM Language Server",
         serverOptions,
         clientOptions
     );
@@ -189,7 +192,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
     // Запускаем клиента
     await client.start();
-    extensionOutputChannel.appendLine("CDM16 LSP client started!");
+    extensionOutputChannel.appendLine("CDM LSP client started!");
 
     context.subscriptions.push(client);
 }
