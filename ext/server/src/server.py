@@ -11,6 +11,7 @@ from ast_utils import ast_file_to_string
 from cst_utils import cst_file_to_string
 from document_highlights import document_highlights as build_document_highlights
 from hover_help import hover_for_word, word_at_cursor
+from macro_definition import macro_definition_locations
 from semantic_tokens import legend as semantic_legend, semantic_tokens_full
 
 server = LanguageServer("CDM-server", "v0.1")
@@ -95,6 +96,36 @@ def document_highlight(params: types.DocumentHighlightParams):
         lines,
         line=params.position.line,
         character=params.position.character,
+    )
+
+
+@server.feature(
+    types.TEXT_DOCUMENT_DEFINITION,
+    types.DefinitionRegistrationOptions(
+        document_selector=[
+            {"scheme": "file", "pattern": "**/*.asm"},
+            {"scheme": "file", "pattern": "**/*.mlb"},
+        ],
+    ),
+)
+def definition(params: types.DefinitionParams):
+    uri = params.text_document.uri
+    parsed = urlparse(uri)
+    if parsed.scheme != "file":
+        return None
+    doc = server.workspace.get_text_document(uri)
+    try:
+        line_text = doc.lines[params.position.line]
+    except IndexError:
+        return None
+    word = word_at_cursor(line_text, params.position.character)
+    file_path = Path(unquote(parsed.path))
+    return macro_definition_locations(
+        word,
+        source=doc.source,
+        file_path=file_path,
+        doc_lines=list(doc.lines),
+        dialect=_dialect,
     )
 
 
